@@ -15,3 +15,9 @@ func Skip(count int) Operator {
 		return source.Skip(count)
 	}
 }
+
+func Share() Operator {
+	return func(source Observable) Observable {
+		return source.Share()
+	}
+}

@@ -2,37 +2,48 @@ package rx
 
 //Take 获取最多count数量的事件，然后完成
 func (ob Observable) Take(count int) Observable {
-	return func(sink Sink) {
+	return func(sink *Control) {
 		remain := count
-		source := ob.NewSink()
-		defer close(source)
-		for observer := range sink {
+		source := ob.Subscribe(func(event *Event) {
 			if remain--; remain < 0 {
-				observer.Complete()
-				return
+				sink.Complete()
+			} else {
+				sink.Push(event)
 			}
-			source <- observer
+		})
+		for sink.Check() {
 		}
+		source.Stop()
 	}
 }
 
 //Skip 跳过若干个数据
 func (ob Observable) Skip(count int) Observable {
-	return func(sink Sink) {
-		source := ob.NewSink()
-		defer close(source)
-		for remain := count; remain > 0; remain-- {
-			source <- func(data interface{}, err error) {
-				if err != nil {
-					if observer, ok := <-sink; ok {
-						observer.Error(err)
-					}
-					return
-				}
+	return func(sink *Control) {
+		remain := count
+		source := ob.Subscribe(func(event *Event) {
+			if remain--; remain <= 0 {
+				event.control.control <- sink.observer
 			}
+		})
+		for sink.Check() {
 		}
-		for observer := range sink {
-			source <- observer
+		source.Stop()
+	}
+}
+
+//TakeUntil 一直获取事件直到unitl传来事件为止
+func (ob Observable) TakeUntil(until Observable) Observable {
+	return func(sink *Control) {
+		until.Subscribe(func(event *Event) {
+			if event.err != nil {
+				sink.Complete()
+				event.control.Stop()
+			}
+		})
+		source := ob.Subscribe(sink.Push)
+		for sink.Check() {
 		}
+		source.Stop()
 	}
 }

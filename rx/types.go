@@ -5,24 +5,33 @@ import (
 )
 
 type (
-	//Observer 观察者
-	Observer func(interface{}, error)
-	Sink     chan Observer
-	//Observable 可观察对象
-	Observable func(Sink)
+	Event struct {
+		data    interface{}
+		err     error
+		control *Control
+	}
+	Observer   func(*Event)
+	Observable func(*Control)
 	Operator   func(Observable) Observable
+	ControlSet map[*Control]interface{}
 )
 
 var (
 	Complete = io.EOF
 )
 
-func (obs Observer) Next(data interface{}) {
-	obs(data, nil)
+func (set ControlSet) add(ctrl *Control) {
+	set[ctrl] = nil
 }
-func (obs Observer) Complete() {
-	obs(nil, Complete)
+func (set ControlSet) remove(ctrl *Control) {
+	delete(set, ctrl)
 }
-func (obs Observer) Error(err error) {
-	obs(nil, err)
+func (set ControlSet) isEmpty() bool {
+	return len(set) == 0
+}
+func (ob Observable) Pipe(cbs ...Operator) Observable {
+	for _, cb := range cbs {
+		ob = cb(ob)
+	}
+	return ob
 }

@@ -1,20 +1,20 @@
 package rx
 
+//Subject 可以手动发送数据
+func Subject(input chan interface{}) Observable {
+	return FromChan(input).Share()
+}
+
 //FromSlice 把Slice转成Observable
 func FromSlice(slice []interface{}) Observable {
-	return func(sink Sink) {
-		var observer Observer
-		var ok bool
+	return func(sink *Control) {
 		for _, data := range slice {
-			if observer, ok = <-sink; ok {
-				observer.Next(data)
-			} else {
+			sink.Next(data)
+			if !sink.Check() {
 				return
 			}
 		}
-		if observer != nil {
-			observer.Complete()
-		}
+		sink.Complete()
 	}
 }
 
@@ -25,13 +25,20 @@ func Of(array ...interface{}) Observable {
 
 //FromChan 把一个chan转换成事件流
 func FromChan(source chan interface{}) Observable {
-	return func(sink Sink) {
-		for observer := range sink {
-			if data, ok := <-source; ok {
-				observer.Next(data)
-			} else {
-				observer.Complete()
-				break
+	return func(sink *Control) {
+		for {
+			select {
+			case observer, ok := <-sink.control:
+				if !ok {
+					return
+				}
+				sink.observer = observer
+			case data, ok := <-source:
+				if ok {
+					sink.Next(data)
+				} else {
+					sink.Complete()
+				}
 			}
 		}
 	}
@@ -39,18 +46,25 @@ func FromChan(source chan interface{}) Observable {
 
 //Never 永不回答
 func Never() Observable {
-	return func(sink Sink) {
-		for range sink {
+	return func(sink *Control) {
+		for sink.Check() {
+
 		}
 	}
 }
 
 //Empty 直接完成
 func Empty() Observable {
-	return func(sink Sink) {
-		for observer := range sink {
-			observer.Complete()
-			break
-		}
+	return func(sink *Control) {
+		sink.Complete()
+	}
+}
+
+func Throw(err error) Observable {
+	return func(sink *Control) {
+		sink.Push(&Event{
+			err:     err,
+			control: sink,
+		})
 	}
 }
