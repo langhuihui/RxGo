@@ -8,11 +8,8 @@ func Timeout(duration time.Duration) Observable {
 		timeout := time.After(duration)
 		for {
 			select {
-			case observer, ok := <-sink.control:
-				if !ok {
-					return
-				}
-				sink.observer = observer
+			case <-sink.stop:
+				return
 			case data := <-timeout:
 				sink.Next(data)
 				sink.Complete()
@@ -30,11 +27,8 @@ func Interval(duration time.Duration) Observable {
 		defer interval.Stop()
 		for {
 			select {
-			case observer, ok := <-sink.control:
-				if !ok {
-					return
-				}
-				sink.observer = observer
+			case <-sink.stop:
+				return
 			case <-interval.C:
 				i++
 				sink.Next(i)

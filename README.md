@@ -1,6 +1,6 @@
 # RxGo 非官方实现版本
 
-目标：代码精简，可读性强，实现优雅，占用系统资源低，性能强
+目标：代码精简，设计精妙，可读性强，实现优雅，占用系统资源低，性能强
 
 ## 使用方法
 ### 链式调用方式
@@ -37,63 +37,32 @@ type Observable func(*Control)
 
 ### 控制器对象（由观察者提供传入可观察者）Control
 ```go
+type Stop chan bool
 type Control struct {
-	observer Observer
-	control  chan Observer
-	closed   bool
+	observer Observer //缓存当前的Observer，后续可以被替换
+	stop     Stop     //取消订阅的信号，只用来close
 }
 ```
-该控制器为一个结构体，其中observer记录了当前的observer，control为一个channel用于取消订阅以及修改observer的功能，closed代表已经被取消订阅了
-在任何时候，如果关闭了control这个channel，就意味着**取消订阅**。如果向control写入新的Observer，意味着用于接受数据的函数改变了，这个功能是为了让实现更灵活，更简洁而设计
+该控制器为一个结构体，其中observer记录了当前的observer，
+在任何时候，如果关闭了stop这个channel，就意味着**取消订阅**。
+由于Channel的close可以引发所有读取该Channel的阻塞行为唤醒，所以可以在不同层级复用该channel
+并且，由于已经close的channel可以反复读取以取得是否close的状态信息，所以不需要再额外记录
 Control对象为Observable和事件处理逻辑共同持有，是二者沟通的桥梁
 
 ### 观察者Observer
 ```go
-type Observer func(interface{}, error)
+type Event struct {
+    data    interface{}
+    err     error
+    control *Control
+}
+type Observer  func(*Event)
 ```
 观察者仅仅只是一个函数，当Observable数据推送到Observer中时，即调用了该函数
-如果传入的第二个参数等于特殊的Complete变量，即意味着**事件流完成**
-如果传入的第二个参数不等于nil，即意味着**事件流异常**
+如果传入的Event的err属性等于特殊的Complete变量，即意味着**事件流完成**
+如果传入的Event的err属性不等于nil，即意味着**事件流异常**
 其他情况，意味着**事件流事件**
-
-### 数据传输控制
-为了方便控制内部数据的流动，采用读取control一次，推送一次的方式
-大致示意如下
-```go
-observer:=<-control
-observer.Next(data)
-```
-为了高效灵活的控制，我们在Control的实现中加入了自动写入上一个Observer的方式，除非channel中有来自下游提供的新的Observer
-，具体实现方法见下面
+control属性用于存储当前发送事件的Control对象
 
 ## 设计细节 
-### 创建控制器
-```go
-func NewControl(observer Observer) *Control {
-	return &Control{
-		observer: observer,
-		control:  make(chan Observer, 1),
-		closed:   false,
-	}
-}
-```
-说明：control为带缓冲的channel，这里的设计是为了防止死锁
-因为大部分更换Observer的操作都是发生在Observer函数内部，即事件处理逻辑内部，此时如果执行control<-阻塞，会导致Observable内部阻塞
-
-### 推送数据
-最精髓的设计原理就在下面这个函数中
-```go
-func (c *Control) Push(data interface{}, err ...error) {
-	if len(err) == 1 && err[0] != nil {
-		c.Stop()
-		c.observer.Error(err[0])
-	} else {
-		c.observer.Next(data)
-		if len(c.control) == 0 {
-			c.control <- c.observer
-		}
-	}
-}
-```
-Observable可以调用push函数推送数据，如果control中没有新的Observer，则写入上一个Observer。这里是关键逻辑
-原本可以在下游不停的向control写入Observer，但由于大多数情况是相同的Observer，所以会导致代码冗长，所以在Control中缓存了一个Observer，用于重复使用
+未完待续

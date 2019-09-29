@@ -3,6 +3,7 @@ package unit_tests
 import (
 	. "../rx"
 	. "testing"
+	"time"
 )
 
 func Test_Of(t *T) {
@@ -14,4 +15,10 @@ func Test_Of(t *T) {
 	if count != 4 || err != nil {
 		t.FailNow()
 	}
+}
+
+func Test_StartWith(t *T) {
+	Timeout(time.Second).StartWith(1).SubscribeSync(func(data interface{}) {
+		t.Log(data)
+	})
 }

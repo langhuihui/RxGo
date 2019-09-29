@@ -21,3 +21,14 @@ func Share() Operator {
 		return source.Share()
 	}
 }
+
+func TakeUntil(until Observable) Operator {
+	return func(source Observable) Observable {
+		return source.TakeUntil(until)
+	}
+}
+func StartWith(xs ...interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.StartWith(xs...)
+	}
+}

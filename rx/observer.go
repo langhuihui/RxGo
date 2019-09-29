@@ -1,23 +1,30 @@
 package rx
 
-//Subscribe 订阅Observable，后续对sink发送Observer来拉取数据
-func (ob Observable) Subscribe(observer Observer) (control *Control) {
-	control = NewControl(observer)
+//SubscribeS 同步订阅Observable
+func (ob Observable) SubscribeS(observer Observer, stop Stop) {
+	ob(NewControl(observer, stop))
+}
+
+//SubscribeA 异步订阅Observable
+func (ob Observable) SubscribeA(observer Observer, stop Stop) (control *Control) {
+	control = NewControl(observer, stop)
 	go ob(control)
 	return
 }
 
 //SubscribeAsync 异步订阅模式，返回一个可用于终止事件流的函数
 func (ob Observable) SubscribeAsync(onNext func(data interface{}), onComplete func(), onError func(error)) func() {
-	source := ob.Subscribe(func(event *Event) {
+	source := ob.SubscribeA(func(event *Event) {
 		if event.err == nil {
 			onNext(event.data)
 		} else if event.err == Complete {
 			onComplete()
+			event.control.Stop()
 		} else {
 			onError(event.err)
+			event.control.Stop()
 		}
-	})
+	}, make(Stop))
 	return source.Stop
 }
 
@@ -27,7 +34,7 @@ func (ob Observable) SubscribeSync(onNext func(data interface{})) (err error) {
 	complete := make(chan error)
 	defer close(next)
 	defer close(complete)
-	ob.Subscribe(func(event *Event) {
+	source := ob.SubscribeA(func(event *Event) {
 		if event.err == nil {
 			next <- event.data
 		} else if event.err == Complete {
@@ -35,12 +42,13 @@ func (ob Observable) SubscribeSync(onNext func(data interface{})) (err error) {
 		} else {
 			complete <- err
 		}
-	})
+	}, make(Stop))
 	for {
 		select {
 		case data := <-next:
 			onNext(data)
 		case err = <-complete:
+			source.Stop()
 			return
 		}
 	}

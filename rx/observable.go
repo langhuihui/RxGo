@@ -10,7 +10,7 @@ func FromSlice(slice []interface{}) Observable {
 	return func(sink *Control) {
 		for _, data := range slice {
 			sink.Next(data)
-			if !sink.Check() {
+			if sink.IsClosed() {
 				return
 			}
 		}
@@ -28,11 +28,8 @@ func FromChan(source chan interface{}) Observable {
 	return func(sink *Control) {
 		for {
 			select {
-			case observer, ok := <-sink.control:
-				if !ok {
-					return
-				}
-				sink.observer = observer
+			case <-sink.stop:
+				return
 			case data, ok := <-source:
 				if ok {
 					sink.Next(data)
@@ -47,9 +44,6 @@ func FromChan(source chan interface{}) Observable {
 //Never 永不回答
 func Never() Observable {
 	return func(sink *Control) {
-		for sink.Check() {
-
-		}
 	}
 }
 

@@ -4,16 +4,14 @@ package rx
 func (ob Observable) Take(count int) Observable {
 	return func(sink *Control) {
 		remain := count
-		source := ob.Subscribe(func(event *Event) {
+		ob.SubscribeS(func(event *Event) {
 			if remain--; remain < 0 {
 				sink.Complete()
+				sink.Stop()
 			} else {
 				sink.Push(event)
 			}
-		})
-		for sink.Check() {
-		}
-		source.Stop()
+		}, sink.stop) //复用下游的stop信号
 	}
 }
 
@@ -21,29 +19,25 @@ func (ob Observable) Take(count int) Observable {
 func (ob Observable) Skip(count int) Observable {
 	return func(sink *Control) {
 		remain := count
-		source := ob.Subscribe(func(event *Event) {
+		ob.SubscribeS(func(event *Event) {
 			if remain--; remain <= 0 {
-				event.control.control <- sink.observer
+				//使用下游的Observer代替本函数，使上游数据直接下发到下游
+				event.control.observer = sink.observer
 			}
-		})
-		for sink.Check() {
-		}
-		source.Stop()
+		}, sink.stop) //复用下游的stop信号
 	}
 }
 
 //TakeUntil 一直获取事件直到unitl传来事件为止
 func (ob Observable) TakeUntil(until Observable) Observable {
 	return func(sink *Control) {
-		until.Subscribe(func(event *Event) {
+		until.SubscribeA(func(event *Event) {
 			if event.err != nil {
+				//获取到任何数据就让下游完成
 				sink.Complete()
-				event.control.Stop()
+				sink.Stop()
 			}
-		})
-		source := ob.Subscribe(sink.Push)
-		for sink.Check() {
-		}
-		source.Stop()
+		}, sink.stop)
+		ob(sink)
 	}
 }

@@ -1,30 +1,40 @@
 package rx
 
+//定义一个用于取消订阅的channel，以close该channel为信号
+type Stop chan bool
+
+//Control 用于沟通上下游之间的桥梁，可向下发送数据，向上取消订阅
 type Control struct {
-	observer Observer
-	control  chan Observer
-	closed   bool
+	observer Observer //缓存当前的Observer，后续可以被替换
+	stop     Stop     //取消订阅的信号，只用来close
 }
 
-func NewControl(observer Observer) *Control {
+func NewControl(observer Observer, stop Stop) *Control {
 	return &Control{
 		observer: observer,
-		control:  make(chan Observer, 1),
-		closed:   false,
+		stop:     stop,
 	}
 }
 
 //Stop 取消订阅
 func (c *Control) Stop() {
-	if !c.closed {
-		c.closed = true
-		close(c.control)
+	if !c.IsClosed() {
+		close(c.stop)
+	}
+}
+
+//判断是否已经取消订阅
+func (c *Control) IsClosed() bool {
+	select {
+	case <-c.stop:
+		return true
+	default:
+		return false
 	}
 }
 
 //Complete 事件流完成
 func (c *Control) Complete() {
-	c.Stop()
 	c.observer(&Event{
 		control: c,
 		err:     Complete,
@@ -37,26 +47,10 @@ func (c *Control) Next(data interface{}) {
 		data:    data,
 		control: c,
 	})
-	if len(c.control) == 0 {
-		c.control <- c.observer
-	}
 }
 
 //Push 推送数据
 func (c *Control) Push(event *Event) {
-	if event.err != nil {
-		c.Stop()
-		c.observer(event)
-	} else {
-		c.observer(event)
-		if len(c.control) == 0 {
-			c.control <- c.observer
-		}
-	}
-}
-
-//Check 检查是否已取消订阅，并更新观察者回调函数
-func (c *Control) Check() (ok bool) {
-	c.observer, ok = <-c.control
-	return
+	event.control = c //将事件中的control设置为当前的Control
+	c.observer(event)
 }
