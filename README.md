@@ -1,5 +1,5 @@
 # RxGo 非官方实现版本
-<img src="https://img.shields.io/codecov/c/github/langhuihui/RxGo?token=6e9d8ea6-c526-4e8e-b1e0-2f8dc4d58eeb">
+[![codecov](https://codecov.io/gh/langhuihui/RxGo/branch/master/graph/badge.svg)](https://codecov.io/gh/langhuihui/RxGo)
 
 目标：代码精简，设计精妙，可读性强，实现优雅，占用系统资源低，性能强
 
@@ -9,13 +9,27 @@
 
 ### Observable
 
-[x] FromSlice [x] FromChan [x] Of [x] Subject
-[x] Timeout [x] Interval [x] Merge [x] Concat [x] CombineLatest
+-[x] FromSlice
+-[x] FromChan
+-[x] Of 
+-[x] Subject
+-[x] Timeout
+-[x] Interval
+-[x] Merge
+-[x] Concat
+-[x] CombineLatest
 
 ### Operator
 
-[x] Take [x] TakeWhile [x] TakeUntil [x] Skip [x] SkipWhile [x] SkipUntil [x] IgnoreElements
-[x] Share [x] StartWith
+-[x] Take 
+-[x] TakeWhile
+-[x] TakeUntil
+-[x] Skip 
+-[x] SkipWhile 
+-[x] SkipUntil
+-[x] IgnoreElements
+-[x] Share
+-[x] StartWith
 
 ## 使用方法
 ### 链式调用方式

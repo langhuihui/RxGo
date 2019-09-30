@@ -35,22 +35,18 @@ func (c *Control) IsClosed() bool {
 
 //Complete 事件流完成
 func (c *Control) Complete() {
-	c.observer(&Event{
-		control: c,
-		err:     Complete,
-	})
+	c.Push(&Event{err: Complete})
 }
 
 //Next 推送数据
 func (c *Control) Next(data interface{}) {
-	c.observer(&Event{
-		data:    data,
-		control: c,
-	})
+	c.Push(&Event{data: data})
 }
 
 //Push 推送数据
 func (c *Control) Push(event *Event) {
 	event.control = c //将事件中的control设置为当前的Control
-	c.observer(event)
+	if !c.IsClosed() {
+		c.observer(event)
+	}
 }

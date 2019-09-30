@@ -18,11 +18,11 @@ func (ob Observable) SubscribeAsync(onNext func(data interface{}), onComplete fu
 		if event.err == nil {
 			onNext(event.data)
 		} else if event.err == Complete {
+			event.control.Stop()
 			onComplete()
-			event.control.Stop()
 		} else {
-			onError(event.err)
 			event.control.Stop()
+			onError(event.err)
 		}
 	}, make(Stop))
 	return source.Stop
@@ -34,12 +34,15 @@ func (ob Observable) SubscribeSync(onNext func(data interface{})) (err error) {
 	complete := make(chan error)
 	defer close(next)
 	defer close(complete)
-	source := ob.SubscribeA(func(event *Event) {
+	ob.SubscribeA(func(event *Event) {
+
 		if event.err == nil {
 			next <- event.data
 		} else if event.err == Complete {
+			event.control.Stop()
 			complete <- nil
 		} else {
+			event.control.Stop()
 			complete <- err
 		}
 	}, make(Stop))
@@ -48,7 +51,6 @@ func (ob Observable) SubscribeSync(onNext func(data interface{})) (err error) {
 		case data := <-next:
 			onNext(data)
 		case err = <-complete:
-			source.Stop()
 			return
 		}
 	}

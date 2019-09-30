@@ -8,7 +8,7 @@ before_install:
   - go get -t -v ./...
 
 script:
-  - go test github.com/langhuihui/RxGo/unit_tests -race -coverprofile=coverage.txt -covermode=atomic
+  - go test github.com/langhuihui/RxGo/unit_tests -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) -t 6e9d8ea6-c526-4e8e-b1e0-2f8dc4d58eeb
