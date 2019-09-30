@@ -11,27 +11,27 @@
 
 ### Observable
 
--[x] FromSlice
--[x] FromChan
--[x] Of 
--[x] Subject
--[x] Timeout
--[x] Interval
--[x] Merge
--[x] Concat
--[x] CombineLatest
+- [x] FromSlice
+- [x] FromChan
+- [x] Of 
+- [x] Subject
+- [x] Timeout
+- [x] Interval
+- [x] Merge
+- [x] Concat
+- [x] CombineLatest
 
 ### Operator
 
--[x] Take 
--[x] TakeWhile
--[x] TakeUntil
--[x] Skip 
--[x] SkipWhile 
--[x] SkipUntil
--[x] IgnoreElements
--[x] Share
--[x] StartWith
+- [x] Take 
+- [x] TakeWhile
+- [x] TakeUntil
+- [x] Skip 
+- [x] SkipWhile 
+- [x] SkipUntil
+- [x] IgnoreElements
+- [x] Share
+- [x] StartWith
 
 ## 使用方法
 ### 链式调用方式
