@@ -10,7 +10,7 @@ func FromSlice(slice []interface{}) Observable {
 	return func(sink *Control) {
 		for _, data := range slice {
 			sink.Next(data)
-			if sink.IsClosed() {
+			if sink.IsStopped() {
 				return
 			}
 		}

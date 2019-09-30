@@ -1,4 +1,6 @@
 # RxGo 非官方实现版本
+[![Build Status](https://travis-ci.org/langhuihui/RxGo.svg?branch=master)](https://travis-ci.org/langhuihui/RxGo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/langhuihui/RxGo)](https://goreportcard.com/report/github.com/langhuihui/RxGo)
 [![codecov](https://codecov.io/gh/langhuihui/RxGo/branch/master/graph/badge.svg)](https://codecov.io/gh/langhuihui/RxGo)
 
 目标：代码精简，设计精妙，可读性强，实现优雅，占用系统资源低，性能强
@@ -47,9 +49,10 @@ func main(){
 ```go
 import (
     "github.com/langhuihui/RxGo/rx"
+    "github.com/langhuihui/RxGo/pipe"
 )
 func main(){
-    err := rx.Of(1, 2, 3, 4).Pipe(rx.Skip(1),rx.Take(2)).SubscribeSync(func(data interface{}) {
+    err := rx.Of(1, 2, 3, 4).Pipe(pipe.Skip(1),pipe.Take(2)).SubscribeSync(func(data interface{}) {
         
     }))
 }

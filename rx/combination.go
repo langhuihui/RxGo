@@ -48,7 +48,7 @@ func (ob Observable) share(childrenCtrl <-chan *Control) {
 	}
 	var source *Control
 	for child := range childrenCtrl {
-		if child.IsClosed() {
+		if child.IsStopped() {
 			children.remove(child)
 			if children.isEmpty() {
 				source.Stop()
@@ -78,7 +78,7 @@ func (ob Observable) StartWith(xs ...interface{}) Observable {
 	return func(sink *Control) {
 		for _, data := range xs {
 			sink.Next(data)
-			if sink.IsClosed() {
+			if sink.IsStopped() {
 				return
 			}
 		}
