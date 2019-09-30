@@ -1,6 +1,6 @@
 package pipe
 
-import . "../rx"
+import . "github.com/langhuihui/RxGo/rx"
 
 func Take(count int) Operator {
 	return func(source Observable) Observable {

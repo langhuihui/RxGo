@@ -1,7 +1,7 @@
 package unit_tests
 
 import (
-	. "../rx"
+	. "github.com/langhuihui/RxGo/rx"
 	. "testing"
 	"time"
 )
