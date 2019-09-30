@@ -22,3 +22,9 @@ func Test_StartWith(t *T) {
 		t.Log(data)
 	})
 }
+
+func Test_IgnoreElements(t *T) {
+	Of(1, 2, 3, 4).IgnoreElements().SubscribeSync(func(data interface{}) {
+		t.FailNow()
+	})
+}

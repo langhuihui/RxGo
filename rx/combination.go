@@ -39,7 +39,7 @@ func Concat(sources ...Observable) Observable {
 		ob(source)
 	}
 }
-func (ob Observable) share(childrenCtrl chan *Control) {
+func (ob Observable) share(childrenCtrl <-chan *Control) {
 	children := make(ControlSet)
 	fromSource := func(event *Event) {
 		for sink := range children {
@@ -67,9 +67,9 @@ func (ob Observable) Share() Observable {
 	childrenCtrl := make(chan *Control)
 	go ob.share(childrenCtrl)
 	return func(sink *Control) {
-		childrenCtrl <- sink
+		childrenCtrl <- sink //加入观察者
 		<-sink.stop
-		childrenCtrl <- sink
+		childrenCtrl <- sink //移除观察者
 	}
 }
 
@@ -83,5 +83,39 @@ func (ob Observable) StartWith(xs ...interface{}) Observable {
 			}
 		}
 		ob(sink)
+	}
+}
+
+//CombineLatest 合并多个流的最新数据
+func CombineLatest(sources ...Observable) Observable {
+	count := len(sources)
+	return func(sink *Control) {
+		remain := count //尚为有最新数据的源
+		live := count   //尚没有完成的数据源
+		buffer := make([]interface{}, count)
+		e := &Event{
+			data:    buffer,
+			control: sink,
+		}
+		for i, ob := range sources {
+			buffer[i] = Complete
+			ob.SubscribeA(func(event *Event) {
+				if event.err == nil {
+					if buffer[i] == Complete {
+						remain--
+					}
+					buffer[i] = event.data
+					if remain == 0 {
+						sink.Push(e)
+					}
+				} else {
+					live--
+					//所有数据源没有全部发送过数据或者已经全部都完成了
+					if remain > 0 || live == 0 {
+						sink.Complete()
+					}
+				}
+			}, sink.stop)
+		}
 	}
 }

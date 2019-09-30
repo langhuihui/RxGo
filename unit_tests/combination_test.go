@@ -33,3 +33,24 @@ func Test_Share(t *T) {
 		t.FailNow()
 	}
 }
+
+func Test_CombineLatest(t *T) {
+	CombineLatest(Of(1, 2), Timeout(time.Second)).SubscribeSync(func(data interface{}) {
+		x, ok := data.([]interface{})
+		if ok && len(x) == 2 {
+			var a int
+			a, ok = x[0].(int)
+			if ok && a == 2 {
+				_, ok = x[1].(time.Time)
+				if !ok {
+					t.Fail()
+				}
+			} else {
+				t.Fail()
+			}
+		} else {
+			t.Fail()
+		}
+	})
+
+}
