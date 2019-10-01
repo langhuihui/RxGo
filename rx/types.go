@@ -10,11 +10,22 @@ type (
 		err     error
 		control *Control
 	}
-	Observer   func(*Event)
-	Observable func(*Control)
-	Operator   func(Observable) Observable
-	ControlSet map[*Control]interface{}
+	Observer interface {
+		Push(*Event)
+	}
+	Observable   func(*Control)
+	Operator     func(Observable) Observable
+	ControlSet   map[*Control]interface{}
+	ObserverFunc func(*Event)
+	ObserverChan chan *Event
 )
+
+func (observer ObserverFunc) Push(event *Event) {
+	observer(event)
+}
+func (observer ObserverChan) Push(event *Event) {
+	observer <- event
+}
 
 var (
 	Complete = io.EOF

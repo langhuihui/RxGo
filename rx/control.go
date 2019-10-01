@@ -47,6 +47,6 @@ func (c *Control) Next(data interface{}) {
 func (c *Control) Push(event *Event) {
 	event.control = c //将事件中的control设置为当前的Control
 	if !c.IsStopped() {
-		c.observer(event)
+		c.observer.Push(event)
 	}
 }

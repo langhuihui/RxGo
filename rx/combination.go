@@ -15,7 +15,7 @@ func Merge(sources ...Observable) Observable {
 			}
 		}
 		for _, source := range sources {
-			scs.add(source.SubscribeA(onNext, sink.stop))
+			scs.add(source.SubscribeA(ObserverFunc(onNext), sink.stop))
 		}
 	}
 }
@@ -27,7 +27,7 @@ func Concat(sources ...Observable) Observable {
 		var source *Control
 		ob := remains[0]
 		remains = remains[1:]
-		source = NewControl(func(event *Event) {
+		source = NewControl(ObserverFunc(func(event *Event) {
 			if event.err == Complete && len(remains) > 0 {
 				ob = remains[0]
 				remains = remains[1:]
@@ -35,28 +35,31 @@ func Concat(sources ...Observable) Observable {
 			} else {
 				sink.Push(event)
 			}
-		}, sink.stop)
+		}), sink.stop)
 		ob(source)
 	}
 }
 func (ob Observable) share(childrenCtrl <-chan *Control) {
 	children := make(ControlSet)
-	fromSource := func(event *Event) {
-		for sink := range children {
-			sink.Push(event)
-		}
-	}
+	eventChan := make(ObserverChan)
 	var source *Control
-	for child := range childrenCtrl {
-		if child.IsStopped() {
-			children.remove(child)
-			if children.isEmpty() {
-				source.Stop()
+	for {
+		select {
+		case child := <-childrenCtrl:
+			if child.IsStopped() {
+				children.remove(child)
+				if children.isEmpty() {
+					source.Stop()
+				}
+			} else {
+				children.add(child)
+				if len(children) == 1 {
+					source = ob.SubscribeA(eventChan, make(Stop))
+				}
 			}
-		} else {
-			children.add(child)
-			if len(children) == 1 {
-				source = ob.SubscribeA(fromSource, make(Stop))
+		case event := <-eventChan:
+			for sink := range children {
+				sink.Push(event)
 			}
 		}
 	}
@@ -99,7 +102,7 @@ func CombineLatest(sources ...Observable) Observable {
 		}
 		for i, ob := range sources {
 			buffer[i] = Complete
-			ob.SubscribeA(func(event *Event) {
+			ob.SubscribeA(ObserverFunc(func(event *Event) {
 				if event.err == nil {
 					if buffer[i] == Complete {
 						remain--
@@ -115,7 +118,7 @@ func CombineLatest(sources ...Observable) Observable {
 						sink.Complete()
 					}
 				}
-			}, sink.stop)
+			}), sink.stop)
 		}
 	}
 }

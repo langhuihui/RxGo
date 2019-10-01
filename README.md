@@ -57,6 +57,11 @@ func main(){
     }))
 }
 ```
+管道模式相比链式模式，具有操作符**可扩展性**，用户可以按照规则创建属于自己的操作符
+```go
+type Operator func(Observable) Observable
+```
+操作符只需要返回Operator这个类型即可
 
 # 设计思想
 ## 总体方案
@@ -76,9 +81,13 @@ type Control struct {
 }
 ```
 该控制器为一个结构体，其中observer记录了当前的observer，
+
 在任何时候，如果关闭了stop这个channel，就意味着**取消订阅**。
+
 由于Channel的close可以引发所有读取该Channel的阻塞行为唤醒，所以可以在不同层级复用该channel
+
 并且，由于已经close的channel可以反复读取以取得是否close的状态信息，所以不需要再额外记录
+
 Control对象为Observable和事件处理逻辑共同持有，是二者沟通的桥梁
 
 ### 观察者Observer
@@ -88,13 +97,32 @@ type Event struct {
     err     error
     control *Control
 }
-type Observer  func(*Event)
+Observer interface {
+    Push(*Event)
+ }
 ```
-观察者仅仅只是一个函数，当Observable数据推送到Observer中时，即调用了该函数
+观察者是一个接口，实现Push函数，当Observable数据推送到Observer中时，即调用了该函数
+
 如果传入的Event的err属性等于特殊的Complete变量，即意味着**事件流完成**
+
 如果传入的Event的err属性不等于nil，即意味着**事件流异常**
+
 其他情况，意味着**事件流事件**
+
 control属性用于存储当前发送事件的Control对象
 
+这样做的好处是可以实现不同的观察者，比如函数或者channel
+```go
+type(
+    ObserverFunc func(*Event)
+    ObserverChan chan *Event
+)
+func (observer ObserverFunc) Push(event *Event) {
+	observer(event)
+}
+func (observer ObserverChan) Push(event *Event) {
+	observer <- event
+}
+```
 ## 设计细节 
 未完待续

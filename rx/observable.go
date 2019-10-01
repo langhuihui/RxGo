@@ -47,13 +47,14 @@ func Never() Observable {
 	}
 }
 
-//Empty 直接完成
+//Empty 不会发送任何数据，直接完成
 func Empty() Observable {
 	return func(sink *Control) {
 		sink.Complete()
 	}
 }
 
+//Throw 直接抛出一个错误
 func Throw(err error) Observable {
 	return func(sink *Control) {
 		sink.Push(&Event{

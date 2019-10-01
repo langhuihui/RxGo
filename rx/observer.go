@@ -14,7 +14,7 @@ func (ob Observable) SubscribeA(observer Observer, stop Stop) (control *Control)
 
 //SubscribeAsync 异步订阅模式，返回一个可用于终止事件流的函数
 func (ob Observable) SubscribeAsync(onNext func(data interface{}), onComplete func(), onError func(error)) func() {
-	source := ob.SubscribeA(func(event *Event) {
+	source := ob.SubscribeA(ObserverFunc(func(event *Event) {
 		if event.err == nil {
 			onNext(event.data)
 		} else if event.err == Complete {
@@ -24,34 +24,25 @@ func (ob Observable) SubscribeAsync(onNext func(data interface{}), onComplete fu
 			event.control.Stop()
 			onError(event.err)
 		}
-	}, make(Stop))
+	}), make(Stop))
 	return source.Stop
 }
 
 //SubscribeOnCurrent 同步订阅模式，会阻塞当前goroutine，函数返回代表完成
 func (ob Observable) SubscribeSync(onNext func(data interface{})) (err error) {
-	next := make(chan interface{})
-	complete := make(chan error)
-	defer close(next)
-	defer close(complete)
-	ob.SubscribeA(func(event *Event) {
-
+	eventChan := make(ObserverChan)
+	ob.SubscribeA(eventChan, make(Stop))
+	for event := range eventChan {
 		if event.err == nil {
-			next <- event.data
+			onNext(event.data)
 		} else if event.err == Complete {
 			event.control.Stop()
-			complete <- nil
+			close(eventChan)
 		} else {
 			event.control.Stop()
-			complete <- err
-		}
-	}, make(Stop))
-	for {
-		select {
-		case data := <-next:
-			onNext(data)
-		case err = <-complete:
-			return
+			close(eventChan)
+			return event.err
 		}
 	}
+	return
 }
