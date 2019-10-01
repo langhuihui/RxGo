@@ -1,34 +1,29 @@
 package rx
 
-import (
-	"io"
-)
-
 type (
 	Event struct {
-		data    interface{}
-		err     error
-		control *Control
+		Data    interface{}
+		Control *Control
 	}
 	Observer interface {
-		Push(*Event)
+		OnNext(*Event)
 	}
-	Observable   func(*Control)
+	Observable   func(*Control) error
 	Operator     func(Observable) Observable
 	ControlSet   map[*Control]interface{}
 	ObserverFunc func(*Event)
 	ObserverChan chan *Event
 )
 
-func (observer ObserverFunc) Push(event *Event) {
+func (observer ObserverFunc) OnNext(event *Event) {
 	observer(event)
 }
-func (observer ObserverChan) Push(event *Event) {
+func (observer ObserverChan) OnNext(event *Event) {
 	observer <- event
 }
 
 var (
-	Complete = io.EOF
+	EmptyObserver = ObserverFunc(func(event *Event) {})
 )
 
 func (set ControlSet) add(ctrl *Control) {

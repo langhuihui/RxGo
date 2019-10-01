@@ -8,45 +8,36 @@ import (
 
 func Test_Take(t *T) {
 	count := 0
-	Of(1, 2, 3, 4).Take(2).SubscribeAsync(func(data interface{}) {
-		t.Log(data)
+	Of(1, 2, 3, 4).Take(2).Subscribe(ObserverFunc(func(event *Event) {
+		t.Log(event.Data)
 		count++
 		if count > 2 {
 			t.FailNow()
 		}
-	}, func() {
-		if count != 2 {
-			t.FailNow()
-		}
-	}, func(err error) {
-		t.Error(err)
-	})
-	<-time.After(time.Second)
+	}))
+	if count != 2 {
+		t.FailNow()
+	}
 }
 
 func Test_Skip(t *T) {
 	count := 0
-	sub := Of(1, 2, 3, 4).Skip(2).SubscribeAsync(func(data interface{}) {
-		t.Log(data)
+	Of(1, 2, 3, 4).Skip(2).Subscribe(ObserverFunc(func(event *Event) {
+		t.Log(event.Data)
 		count++
 		if count > 2 {
 			t.FailNow()
 		}
-	}, func() {
-		if count != 2 {
-			t.FailNow()
-		}
-	}, func(err error) {
-		t.Error(err)
-	})
-	t.Log(sub != nil)
-	<-time.After(time.Second)
+	}))
+	if count != 2 {
+		t.FailNow()
+	}
 }
 
 func Test_TakeUntil(t *T) {
-	Interval(time.Second).TakeUntil(Timeout(time.Second * 4)).SubscribeSync(func(data interface{}) {
-		t.Log(data)
-	})
+	Interval(time.Second).TakeUntil(Timeout(time.Second * 4)).Subscribe(ObserverFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
 }
 
 func Test_TakeWhile(t *T) {
@@ -56,9 +47,9 @@ func Test_TakeWhile(t *T) {
 			ok = num < 10
 		}
 		return ok
-	}).SubscribeSync(func(data interface{}) {
-		t.Log(data)
-	})
+	}).Subscribe(ObserverFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
 }
 func Test_SkipWhile(t *T) {
 	Of(1, 2, 3, 19, 1).SkipWhile(func(data interface{}) bool {
@@ -67,12 +58,12 @@ func Test_SkipWhile(t *T) {
 			ok = num < 10
 		}
 		return ok
-	}).SubscribeSync(func(data interface{}) {
-		t.Log(data)
-	})
+	}).Subscribe(ObserverFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
 }
 func Test_SkipUntil(t *T) {
-	Interval(time.Second).Take(5).SkipUntil(Timeout(time.Second * 3)).SubscribeSync(func(data interface{}) {
-		t.Log(data)
-	})
+	Interval(time.Second).Take(5).SkipUntil(Timeout(time.Second * 3)).Subscribe(ObserverFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
 }

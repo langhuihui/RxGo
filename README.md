@@ -37,22 +37,22 @@
 ### 链式调用方式
 ```go
 import (
-    "github.com/langhuihui/RxGo/rx"
+    . "github.com/langhuihui/RxGo/rx"
 )
 func main(){
-    err := rx.Of(1, 2, 3, 4).Take(2).SubscribeSync(func(data interface{}) {
+    err := Of(1, 2, 3, 4).Take(2).Subscribe(ObserverFunc(func(event *Event) {
         
-    })
+    }))
 }
 ```
 ### 管道模式
 ```go
 import (
-    "github.com/langhuihui/RxGo/rx"
-    "github.com/langhuihui/RxGo/pipe"
+    . "github.com/langhuihui/RxGo/rx"
+    . "github.com/langhuihui/RxGo/pipe"
 )
 func main(){
-    err := rx.Of(1, 2, 3, 4).Pipe(pipe.Skip(1),pipe.Take(2)).SubscribeSync(func(data interface{}) {
+    err := Of(1, 2, 3, 4).Pipe(Skip(1),Take(2)).Subscribe(ObserverFunc(func(event *Event) {
         
     }))
 }
@@ -68,9 +68,13 @@ type Operator func(Observable) Observable
 ### 可观察对象（事件源）Observable
 Observable 被定义成为一个函数，该函数含有一个类型为*Control的参数。
 ```go
-type Observable func(*Control)
+type Observable func(*Control) error
 ```
 任何事件源都是这样的一个函数，当调用该函数即意味着**订阅**了该事件源，入参为一个控制器，具体功能见下面
+
+如果该函数返回nil，即意味着**事件流完成**
+
+否则意味着**事件流异常**
 
 ### 控制器对象（由观察者提供传入可观察者）Control
 ```go
@@ -78,6 +82,7 @@ type Stop chan bool
 type Control struct {
 	observer Observer //缓存当前的Observer，后续可以被替换
 	stop     Stop     //取消订阅的信号，只用来close
+    err      error    //缓存当前错误
 }
 ```
 该控制器为一个结构体，其中observer记录了当前的observer，
@@ -94,20 +99,13 @@ Control对象为Observable和事件处理逻辑共同持有，是二者沟通的
 ```go
 type Event struct {
     data    interface{}
-    err     error
     control *Control
 }
 Observer interface {
-    Push(*Event)
+    OnNext(*Event)
  }
 ```
-观察者是一个接口，实现Push函数，当Observable数据推送到Observer中时，即调用了该函数
-
-如果传入的Event的err属性等于特殊的Complete变量，即意味着**事件流完成**
-
-如果传入的Event的err属性不等于nil，即意味着**事件流异常**
-
-其他情况，意味着**事件流事件**
+观察者是一个接口，实现OnNext函数，当Observable数据推送到Observer中时，即调用了该函数
 
 control属性用于存储当前发送事件的Control对象
 
@@ -117,10 +115,10 @@ type(
     ObserverFunc func(*Event)
     ObserverChan chan *Event
 )
-func (observer ObserverFunc) Push(event *Event) {
+func (observer ObserverFunc) OnNext(event *Event) {
 	observer(event)
 }
-func (observer ObserverChan) Push(event *Event) {
+func (observer ObserverChan) OnNext(event *Event) {
 	observer <- event
 }
 ```

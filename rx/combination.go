@@ -1,48 +1,45 @@
 package rx
 
+import "errors"
+
 //Merge 合并多个事件流
 func Merge(sources ...Observable) Observable {
-	return func(sink *Control) {
-		scs := make(ControlSet)
-		onNext := func(event *Event) {
-			if event.err == nil {
-				sink.Push(event)
-			} else {
-				scs.remove(event.control)
-				if scs.isEmpty() {
-					sink.Complete()
+	count := len(sources)
+	return func(sink *Control) (err error) {
+		remain := count
+		source := NewControl(ObserverFunc(sink.Push), make(Stop))
+		for _, ob := range sources {
+			go func() {
+				ob(source)
+				remain--
+				if remain == 0 {
+					sink.Stop()
 				}
-			}
+			}()
 		}
-		for _, source := range sources {
-			scs.add(source.SubscribeA(ObserverFunc(onNext), sink.stop))
-		}
+		defer source.Stop()
+		return sink.Wait()
 	}
 }
 
 //Concat 连接多个事件流
 func Concat(sources ...Observable) Observable {
-	return func(sink *Control) {
-		remains := sources
-		var source *Control
-		ob := remains[0]
-		remains = remains[1:]
-		source = NewControl(ObserverFunc(func(event *Event) {
-			if event.err == Complete && len(remains) > 0 {
-				ob = remains[0]
-				remains = remains[1:]
-				ob(source)
-			} else {
-				sink.Push(event)
+	return func(sink *Control) (err error) {
+		for _, ob := range sources {
+			err = ob(sink)
+			//如果出现取消订阅或者出现错误，都进行完成动作，否则是正常完成，接着订阅下一个数据源
+			if sink.IsStopped() || err != nil {
+				return err
 			}
-		}), sink.stop)
-		ob(source)
+		}
+		return //全部完成都没有错误，则正常完成
 	}
 }
 func (ob Observable) share(childrenCtrl <-chan *Control) {
 	children := make(ControlSet)
 	eventChan := make(ObserverChan)
 	var source *Control
+	var sourceError error
 	for {
 		select {
 		case child := <-childrenCtrl:
@@ -54,12 +51,22 @@ func (ob Observable) share(childrenCtrl <-chan *Control) {
 			} else {
 				children.add(child)
 				if len(children) == 1 {
-					source = ob.SubscribeA(eventChan, make(Stop))
+					source = NewControl(eventChan, make(Stop))
+					go func() {
+						sourceError = ob(source)
+						close(eventChan)
+					}()
 				}
 			}
-		case event := <-eventChan:
-			for sink := range children {
-				sink.Push(event)
+		case event, ok := <-eventChan:
+			if ok {
+				for sink := range children {
+					sink.Push(event)
+				}
+			} else {
+				for sink := range children {
+					sink.Error(sourceError)
+				}
 			}
 		}
 	}
@@ -69,56 +76,61 @@ func (ob Observable) share(childrenCtrl <-chan *Control) {
 func (ob Observable) Share() Observable {
 	childrenCtrl := make(chan *Control)
 	go ob.share(childrenCtrl)
-	return func(sink *Control) {
+	return func(sink *Control) error {
 		childrenCtrl <- sink //加入观察者
-		<-sink.stop
-		childrenCtrl <- sink //移除观察者
+		defer func() {
+			childrenCtrl <- sink //移除观察者
+		}()
+		return sink.Wait()
 	}
 }
 
 //StartWith 在订阅之前先发送一些数据
 func (ob Observable) StartWith(xs ...interface{}) Observable {
-	return func(sink *Control) {
+	return func(sink *Control) error {
 		for _, data := range xs {
 			sink.Next(data)
 			if sink.IsStopped() {
-				return
+				return sink.err
 			}
 		}
-		ob(sink)
+		return ob(sink)
 	}
 }
 
 //CombineLatest 合并多个流的最新数据
 func CombineLatest(sources ...Observable) Observable {
 	count := len(sources)
-	return func(sink *Control) {
-		remain := count //尚为有最新数据的源
-		live := count   //尚没有完成的数据源
-		buffer := make([]interface{}, count)
-		e := &Event{
-			data:    buffer,
-			control: sink,
-		}
+	NoData := errors.New("NoData")
+	return func(sink *Control) error {
+		remain := count                      //尚未有最新数据的源
+		live := count                        //尚没有完成的数据源
+		buffer := make([]interface{}, count) //待发送的数据缓存
+		e := &Event{buffer, sink}
+		controls := make([]*Control, count)
 		for i, ob := range sources {
-			buffer[i] = Complete
-			ob.SubscribeA(ObserverFunc(func(event *Event) {
-				if event.err == nil {
-					if buffer[i] == Complete {
-						remain--
-					}
-					buffer[i] = event.data
-					if remain == 0 {
-						sink.Push(e)
-					}
-				} else {
-					live--
-					//所有数据源没有全部发送过数据或者已经全部都完成了
-					if remain > 0 || live == 0 {
-						sink.Complete()
-					}
+			buffer[i] = NoData //将该坑位设置为尚未填充数据状态
+			controls[i] = NewControl(ObserverFunc(func(event *Event) {
+				if buffer[i] == NoData {
+					remain--
 				}
-			}), sink.stop)
+				buffer[i] = event.Data
+				if remain == 0 {
+					sink.Push(e)
+				}
+			}), make(Stop))
+			go func(source *Control) {
+				ob(source)
+				if live--; remain > 0 || live == 0 {
+					sink.Stop()
+				}
+			}(controls[i])
 		}
+		defer func() {
+			for _, source := range controls {
+				source.Stop()
+			}
+		}()
+		return sink.Wait()
 	}
 }
