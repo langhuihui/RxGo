@@ -42,8 +42,7 @@ func Test_CombineLatest(t *T) {
 			var a int
 			a, ok = x[0].(int)
 			if ok && a == 2 {
-				_, ok = x[1].(time.Time)
-				if !ok {
+				if _, ok = x[1].(time.Time); !ok {
 					t.Fail()
 				}
 			} else {
@@ -54,4 +53,9 @@ func Test_CombineLatest(t *T) {
 		}
 	}))
 
+}
+func Test_Zip(t *T) {
+	Zip(Of(1, 2), Interval(time.Second)).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
 }

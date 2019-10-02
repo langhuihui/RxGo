@@ -1,6 +1,8 @@
 package pipe
 
-import . "github.com/langhuihui/RxGo/rx"
+import (
+	. "github.com/langhuihui/RxGo/rx"
+)
 
 //Take
 func Take(count uint) Operator {
@@ -62,5 +64,12 @@ func StartWith(xs ...interface{}) Operator {
 func IgnoreElements() Operator {
 	return func(source Observable) Observable {
 		return source.IgnoreElements()
+	}
+}
+
+//Do
+func Do(f func(interface{})) Operator {
+	return func(source Observable) Observable {
+		return source.Do(f)
 	}
 }

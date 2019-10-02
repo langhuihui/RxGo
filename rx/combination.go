@@ -1,6 +1,8 @@
 package rx
 
-import "errors"
+import (
+	"errors"
+)
 
 //Merge 合并多个事件流
 func Merge(sources ...Observable) Observable {
@@ -9,13 +11,13 @@ func Merge(sources ...Observable) Observable {
 		remain := count
 		source := NewObserver(NextFunc(sink.Push), make(Stop))
 		for _, ob := range sources {
-			go func() {
+			go func(ob Observable) {
 				ob(source) //复用相同的Observer
 				remain--
 				if remain == 0 {
 					sink.Stop()
 				}
-			}()
+			}(ob)
 		}
 		defer source.Stop()
 		return sink.Wait()
@@ -110,25 +112,58 @@ func CombineLatest(sources ...Observable) Observable {
 		controls := make([]*Observer, count)
 		for i, ob := range sources {
 			buffer[i] = NoData //将该坑位设置为尚未填充数据状态
-			controls[i] = NewObserver(NextFunc(func(event *Event) {
-				if buffer[i] == NoData {
-					remain--
-				}
-				buffer[i] = event.Data
-				if remain == 0 {
-					sink.Push(e)
-				}
-			}), make(Stop))
-			go func(source *Observer) {
-				ob(source)
+			go func(i int) {
+				controls[i] = NewObserver(NextFunc(func(event *Event) {
+					if buffer[i] == NoData {
+						remain--
+					}
+					buffer[i] = event.Data
+					if remain == 0 {
+						sink.Push(e)
+					}
+				}), make(Stop))
+				ob(controls[i])
 				if live--; remain > 0 || live == 0 {
 					sink.Stop()
 				}
-			}(controls[i])
+			}(i)
 		}
 		defer func() {
 			for _, source := range controls {
 				source.Stop()
+			}
+		}()
+		return sink.Wait()
+	}
+}
+
+//Zip 将多个事件源的事件按顺序组合
+func Zip(sources ...Observable) Observable {
+	count := len(sources)
+	return func(sink *Observer) error {
+		remain := count
+		input := make([]chan interface{}, count)
+		buffer := make([]interface{}, count) //待发送的数据缓存
+		e := &Event{buffer, sink}
+		for i := range sources {
+			input[i] = make(chan interface{}, 1)
+			go func(i int) {
+				sink.err = sources[i](NewObserver(NextFunc(func(event *Event) {
+					input[i] <- event.Data
+					if remain--; remain == 0 {
+						remain = count
+						for j, dataChan := range input {
+							buffer[j] = <-dataChan
+						}
+						sink.Push(e)
+					}
+				}), sink.stop))
+				sink.Stop()
+			}(i)
+		}
+		defer func() {
+			for _, dataChan := range input {
+				close(dataChan)
 			}
 		}()
 		return sink.Wait()

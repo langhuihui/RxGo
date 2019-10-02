@@ -94,3 +94,9 @@ func Test_Create(t *T) {
 		t.Log(event.Data)
 	}))
 }
+
+func Test_Do(t *T) {
+	Of(1, 2, 3).Do(func(i interface{}) {
+		t.Log(i)
+	}).Subscribe(EmptyNext)
+}

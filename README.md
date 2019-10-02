@@ -24,9 +24,11 @@
 - [x] Merge
 - [x] Concat
 - [x] CombineLatest
-
+- [x] Empty
+- [x] Never
+- [x] Throw
 ### Operator
-
+- [x] Do
 - [x] Take 
 - [x] TakeWhile
 - [x] TakeUntil
@@ -36,7 +38,7 @@
 - [x] IgnoreElements
 - [x] Share
 - [x] StartWith
-
+- [x] Zip
 ## 使用方法
 ### 链式调用方式
 ```go
@@ -69,11 +71,16 @@ type Operator func(Observable) Observable
 ```
 
 操作符只需要返回Operator这个类型即可,例如
-
+实现一个happy为false就立即完成的操作符
 ```go
-func MyOperator() Operator {
+func MyOperator(happy bool) Operator {
 	return func(source Observable) Observable {
-		return source.Skip(count)
+		return func (sink *Observer) error {
+            if happy{
+                return source(sink)
+            }
+            return nil
+		}
 	}
 }
 
@@ -112,6 +119,9 @@ Start          value            value             error              Done
 
 有的`Observable`并不会发出完成事件，比如`Never`
 
+参考网站：
+[rxmarbles](https://rxmarbles.com/)
+
 ## 总体方案
 
 实现Rx的关键要素，是要问几个问题
@@ -148,7 +158,7 @@ Observable 被定义成为一个函数，该函数含有一个类型为*Observer
 ```go
 type Observable func(*Observer) error
 ```
-任何事件源都是这样的一个函数，当调用该函数即意味着**订阅**了该事件源，入参为一个Observer``，具体功能见下面
+任何事件源都是这样的一个函数，当调用该函数即意味着**订阅**了该事件源，入参为一个`Observer`，具体功能见下面
 
 如果该函数返回nil，即意味着**事件流完成**
 
@@ -203,7 +213,7 @@ NextHandler interface {
 `NextHandler`是一个接口，实现`OnNext`函数，当`Observable`数据推送到`Observer`中时，即调用了该函数
 
 `Target`属性用于存储当前发送事件的`Observer`对象，有两大重要使命
-1. 更换NextHandler，用户减少数据传递过程
+1. 更换NextHandler，用于减少数据传递过程
 2. 在NextHandler过程中终止事件流
 
 这样做的好处是可以实现不同的观察者，比如函数或者channel
