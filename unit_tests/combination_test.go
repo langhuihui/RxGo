@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-func LogData(t *T) Observer {
-	return ObserverFunc(func(event *Event) {
+func LogData(t *T) NextFunc {
+	return func(event *Event) {
 		t.Log(event.Data)
-	})
+	}
 }
 func Test_Merge(t *T) {
 	Merge(Timeout(time.Second), Timeout(time.Second), Timeout(time.Second)).Subscribe(LogData(t))
@@ -23,10 +23,10 @@ func Test_Share(t *T) {
 	share := Timeout(time.Second).Share()
 	var a time.Time
 	var b time.Time
-	go share.Subscribe(ObserverFunc(func(event *Event) {
+	go share.Subscribe(NextFunc(func(event *Event) {
 		a = event.Data.(time.Time)
 	}))
-	share.Subscribe(ObserverFunc(func(event *Event) {
+	share.Subscribe(NextFunc(func(event *Event) {
 		b = event.Data.(time.Time)
 	}))
 	if a != b {
@@ -35,7 +35,7 @@ func Test_Share(t *T) {
 }
 
 func Test_CombineLatest(t *T) {
-	CombineLatest(Of(1, 2), Timeout(time.Second)).Subscribe(ObserverFunc(func(event *Event) {
+	CombineLatest(Of(1, 2), Timeout(time.Second)).Subscribe(NextFunc(func(event *Event) {
 		data := event.Data
 		x, ok := data.([]interface{})
 		if ok && len(x) == 2 {

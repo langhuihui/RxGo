@@ -3,7 +3,7 @@ package pipe
 import . "github.com/langhuihui/RxGo/rx"
 
 //Take
-func Take(count int) Operator {
+func Take(count uint) Operator {
 	return func(source Observable) Observable {
 		return source.Take(count)
 	}
@@ -24,7 +24,7 @@ func TakeWhile(f func(interface{}) bool) Operator {
 }
 
 //Skip
-func Skip(count int) Operator {
+func Skip(count uint) Operator {
 	return func(source Observable) Observable {
 		return source.Skip(count)
 	}

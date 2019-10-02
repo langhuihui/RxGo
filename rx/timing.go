@@ -4,7 +4,7 @@ import "time"
 
 //Timeout 在一段时间后发送数据
 func Timeout(duration time.Duration) Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		timeout := time.After(duration)
 		for {
 			select {
@@ -21,7 +21,7 @@ func Timeout(duration time.Duration) Observable {
 
 //Interval 按照一定频率持续发送数据
 func Interval(duration time.Duration) Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		interval := time.NewTicker(duration)
 		i := 0
 		defer interval.Stop()

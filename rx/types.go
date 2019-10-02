@@ -2,37 +2,40 @@ package rx
 
 type (
 	Event struct {
-		Data    interface{}
-		Control *Control
+		Data   interface{}
+		Target *Observer
 	}
-	Observer interface {
+	NextHandler interface {
 		OnNext(*Event)
 	}
-	Observable   func(*Control) error
-	Operator     func(Observable) Observable
-	ControlSet   map[*Control]interface{}
-	ObserverFunc func(*Event)
-	ObserverChan chan *Event
+	Observable  func(*Observer) error
+	Operator    func(Observable) Observable
+	ObserverSet map[*Observer]interface{}
+	NextFunc    func(*Event)
+	NextChan    chan *Event
 )
 
-func (observer ObserverFunc) OnNext(event *Event) {
-	observer(event)
+func (next NextFunc) OnNext(event *Event) {
+	next(event)
 }
-func (observer ObserverChan) OnNext(event *Event) {
-	observer <- event
+func (next NextChan) OnNext(event *Event) {
+	next <- event
+}
+func (event *Event) ChangeHandler(observer *Observer) {
+	event.Target.next = observer.next
 }
 
 var (
-	EmptyObserver = ObserverFunc(func(event *Event) {})
+	EmptyNext = NextFunc(func(event *Event) {})
 )
 
-func (set ControlSet) add(ctrl *Control) {
+func (set ObserverSet) add(ctrl *Observer) {
 	set[ctrl] = nil
 }
-func (set ControlSet) remove(ctrl *Control) {
+func (set ObserverSet) remove(ctrl *Observer) {
 	delete(set, ctrl)
 }
-func (set ControlSet) isEmpty() bool {
+func (set ObserverSet) isEmpty() bool {
 	return len(set) == 0
 }
 func (ob Observable) Pipe(cbs ...Operator) Observable {

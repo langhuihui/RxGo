@@ -7,7 +7,7 @@ func Subject(input chan interface{}) Observable {
 
 //FromSlice 把Slice转成Observable
 func FromSlice(slice []interface{}) Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		for _, data := range slice {
 			sink.Next(data)
 			if sink.IsStopped() {
@@ -26,7 +26,7 @@ func Of(array ...interface{}) Observable {
 
 //FromChan 把一个chan转换成事件流
 func FromChan(source chan interface{}) Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		for {
 			select {
 			case <-sink.stop:
@@ -44,7 +44,7 @@ func FromChan(source chan interface{}) Observable {
 
 //Never 永不回答
 func Never() Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		<-sink.stop
 		return sink.err
 	}
@@ -52,18 +52,18 @@ func Never() Observable {
 
 //Empty 不会发送任何数据，直接完成
 func Empty() Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		return sink.err
 	}
 }
 
 //Throw 直接抛出一个错误
 func Throw(err error) Observable {
-	return func(sink *Control) error {
+	return func(sink *Observer) error {
 		return err
 		//sink.OnNext(&Event{
 		//	err:     err,
-		//	Control: sink,
+		//	Target: sink,
 		//})
 	}
 }
