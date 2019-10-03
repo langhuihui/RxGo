@@ -11,7 +11,7 @@ func FromSlice(slice []interface{}) Observable {
 		for _, data := range slice {
 			sink.Next(data)
 			if sink.IsStopped() {
-				return sink.err
+				break
 			}
 		}
 		return sink.err
@@ -39,6 +39,17 @@ func FromChan(source chan interface{}) Observable {
 				}
 			}
 		}
+	}
+}
+
+//Range 产生一段范围内的整数序列
+func Range(start int, count uint) Observable {
+	end := start + int(count)
+	return func(sink *Observer) error {
+		for i := start; i < end && !sink.IsStopped(); i++ {
+			sink.Next(i)
+		}
+		return sink.err
 	}
 }
 

@@ -96,7 +96,7 @@ func Test_Create(t *T) {
 }
 
 func Test_Do(t *T) {
-	Of(1, 2, 3).Do(func(i interface{}) {
+	Range(0, 10).Do(func(i interface{}) {
 		t.Log(i)
 	}).Subscribe(EmptyNext)
 }

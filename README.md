@@ -15,30 +15,33 @@
 
 ### Observable
 
-- [x] FromSlice
-- [x] FromChan
-- [x] Of 
-- [x] Subject
-- [x] Timeout
-- [x] Interval
-- [x] Merge
-- [x] Concat
-- [x] CombineLatest
-- [x] Empty
-- [x] Never
-- [x] Throw
+**`FromSlice`**
+**`FromChan`**
+**`Of`** 
+**`Range`**
+**`Subject`**
+**`Timeout`**
+**`Interval`**
+**`Merge`**
+**`Concat`**
+**`Race`**
+**`CombineLatest`**
+**`Empty`**
+**`Never`**
+**`Throw`**
 ### Operator
-- [x] Do
-- [x] Take 
-- [x] TakeWhile
-- [x] TakeUntil
-- [x] Skip 
-- [x] SkipWhile 
-- [x] SkipUntil
-- [x] IgnoreElements
-- [x] Share
-- [x] StartWith
-- [x] Zip
+**`Do`**
+**`Take`** 
+**`TakeWhile`**
+**`TakeUntil`**
+**`Skip`** 
+**`SkipWhile`** 
+**`SkipUntil`**
+**`IgnoreElements`**
+**`Share`**
+**`StartWith`**
+**`Zip`**
+
 ## 使用方法
 ### 链式调用方式
 ```go
@@ -170,7 +173,7 @@ type Stop chan bool
 type Observer struct {
 	next NextHandler //缓存当前的Handler，后续可以被替换
 	stop     Stop     //取消订阅的信号，只用来close
-    err      error    //缓存当前错误
+	err      error    //缓存当前错误
 }
 ```
 该控制器为一个结构体，其中next记录了当前的NextHandler，
