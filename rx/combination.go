@@ -2,18 +2,19 @@ package rx
 
 import (
 	"errors"
+	"sync/atomic"
 )
 
 //Merge 合并多个事件流
 func Merge(sources ...Observable) Observable {
 	count := len(sources)
 	return func(sink *Observer) (err error) {
-		remain := count
+		remain := int32(count)
 		source := NewObserver(NextFunc(sink.Push), make(Stop))
 		for _, ob := range sources {
 			go func(ob Observable) {
-				ob(source)                 //复用相同的Observer
-				if remain--; remain == 0 { //如果订阅的事件流全部都已经完成则完成当前事件流
+				ob(source)                             //复用相同的Observer
+				if atomic.AddInt32(&remain, -1) == 0 { //如果订阅的事件流全部都已经完成则完成当前事件流
 					sink.Stop()
 				}
 			}(ob)
@@ -106,8 +107,8 @@ func CombineLatest(sources ...Observable) Observable {
 	count := len(sources)
 	NoData := errors.New("NoData")
 	return func(sink *Observer) error {
-		remain := count                      //尚未有最新数据的源
-		live := count                        //尚没有完成的数据源
+		remain := int32(count)               //尚未有最新数据的源
+		live := int32(count)                 //尚没有完成的数据源
 		buffer := make([]interface{}, count) //待发送的数据缓存
 		e := &Event{buffer, sink}
 		observers := make([]*Observer, count)
@@ -116,7 +117,7 @@ func CombineLatest(sources ...Observable) Observable {
 			go func(i int) {
 				observers[i] = NewObserver(NextFunc(func(event *Event) {
 					if buffer[i] == NoData {
-						remain--
+						atomic.AddInt32(&remain, -1)
 					}
 					buffer[i] = event.Data //缓存最新数据
 					if remain == 0 {       //当所有事件流都产生了事件后，就发送事件
@@ -125,7 +126,7 @@ func CombineLatest(sources ...Observable) Observable {
 				}), make(Stop))
 				ob(observers[i])
 				//当有事件流完成后，我们把live减一，如果此时还有事件流从未发送过事件或者所有事件流都已经完成，则完成当前事件流
-				if live--; remain > 0 || live == 0 {
+				if atomic.AddInt32(&live, -1); remain > 0 || live == 0 {
 					sink.Stop()
 				}
 			}(i)
@@ -143,7 +144,7 @@ func CombineLatest(sources ...Observable) Observable {
 func Zip(sources ...Observable) Observable {
 	count := len(sources)
 	return func(sink *Observer) error {
-		remain := count
+		remain := int32(count)
 		input := make([]chan interface{}, count) //缓存每一个事件源的一个事件
 		buffer := make([]interface{}, count)     //待发送的数据缓存
 		e := &Event{buffer, sink}                //每次发送的事件对象
@@ -152,8 +153,8 @@ func Zip(sources ...Observable) Observable {
 			go func(i int) {
 				sink.err = sources[i](NewObserver(NextFunc(func(event *Event) {
 					input[i] <- event.Data //每次只缓存一个数据，然后阻塞等待一下一组
-					if remain--; remain == 0 {
-						remain = count
+					if atomic.AddInt32(&remain, -1) == 0 {
+						remain = int32(count)
 						for j, dataChan := range input {
 							buffer[j] = <-dataChan //把每一个事件源缓存的数据组合
 						}
@@ -179,9 +180,13 @@ func Race(sources ...Observable) Observable {
 	return func(sink *Observer) error {
 		observers := make([]*Observer, count)
 		var winner *Observer
+		var activated uint32 = 0
 		for i := range sources {
 			observers[i] = NewObserver(NextFunc(func(event *Event) {
-				winner = event.Target //记录最快的事件流观察者
+				if atomic.AddUint32(&activated, 1) > 1 {
+					return
+				}
+				winner = event.Target
 				//其他事件流此时可以统统取消
 				for _, ob := range observers {
 					if ob != event.Target {
@@ -199,7 +204,7 @@ func Race(sources ...Observable) Observable {
 			go func(observer *Observer) {
 				err := source(observer)
 				//如果有一个事件流完成，但从未发出过事件比如Empty，或者这个事件流就是最快的事件流，那么就导致事件流完成
-				if winner == nil && winner == observer {
+				if winner != nil || winner == observer {
 					sink.err = err
 					sink.Stop()
 				}

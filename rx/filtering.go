@@ -1,17 +1,20 @@
 package rx
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 //Take 获取最多count数量的事件，然后完成
 func (ob Observable) Take(count uint) Observable {
 	return func(sink *Observer) error {
-		remain := count
+		remain := int32(count)
 		if remain == 0 {
 			return nil
 		}
 		return ob.subscribe(NextFunc(func(event *Event) {
 			sink.Push(event)
-			if remain--; remain == 0 {
+			if atomic.AddInt32(&remain, -1) == 0 {
 				sink.Stop()
 			}
 		}), sink.stop) //复用下游的stop信号
@@ -46,12 +49,12 @@ func (ob Observable) TakeWhile(f func(interface{}) bool) Observable {
 //Skip 跳过若干个数据
 func (ob Observable) Skip(count uint) Observable {
 	return func(sink *Observer) error {
-		remain := count
+		remain := int32(count)
 		if remain == 0 {
 			return ob(sink)
 		}
 		return ob.subscribe(NextFunc(func(event *Event) {
-			if remain--; remain == 0 {
+			if atomic.AddInt32(&remain, -1) == 0 {
 				//使用下游的Observer代替本函数，使上游数据直接下发到下游
 				event.ChangeHandler(sink)
 			}

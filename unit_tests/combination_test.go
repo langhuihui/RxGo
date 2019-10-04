@@ -61,7 +61,7 @@ func Test_Zip(t *T) {
 }
 
 func Test_Race(t *T) {
-	Race(Timeout(time.Second), Timeout(time.Second), Interval(time.Second)).Subscribe(NextFunc(func(event *Event) {
+	Race(Timeout(time.Second), Timeout(time.Second), Interval(time.Second)).Take(3).Subscribe(NextFunc(func(event *Event) {
 		t.Log(event.Data)
 	}))
 }
