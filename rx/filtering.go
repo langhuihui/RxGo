@@ -1,5 +1,7 @@
 package rx
 
+import "time"
+
 //Take 获取最多count数量的事件，然后完成
 func (ob Observable) Take(count uint) Observable {
 	return func(sink *Observer) error {
@@ -88,5 +90,88 @@ func (ob Observable) SkipUntil(until Observable) Observable {
 func (ob Observable) IgnoreElements() Observable {
 	return func(sink *Observer) error {
 		return ob.subscribe(EmptyNext, sink.stop)
+	}
+}
+
+//Filter 过滤一些元素
+func (ob Observable) Filter(f func(data interface{}) bool) Observable {
+	return func(sink *Observer) error {
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if f(event.Data) {
+				sink.Push(event)
+			}
+		}), sink.stop)
+	}
+}
+
+//Distinct 过滤掉重复出现的元素
+func (ob Observable) Distinct() Observable {
+	return func(sink *Observer) error {
+		buffer := make(map[interface{}]bool)
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if _, ok := buffer[event.Data]; !ok {
+				buffer[event.Data] = true
+				sink.Push(event)
+			}
+		}), sink.stop)
+	}
+}
+
+//DistinctUntilChanged 过滤掉和前一个元素相同的元素
+func (ob Observable) DistinctUntilChanged() Observable {
+	return func(sink *Observer) error {
+		var lastData interface{}
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if event.Data != lastData {
+				lastData = event.Data
+				sink.Push(event)
+			}
+		}), sink.stop)
+	}
+}
+
+//Debounce 防抖动
+func (ob Observable) Debounce(f func(interface{}) Observable) Observable {
+	return func(sink *Observer) error {
+		dstop := make(Stop)
+		close(dstop)
+		//最后要关闭中间可能订阅的防抖动Observable
+		defer func() {
+			select {
+			case <-dstop:
+			default:
+				close(dstop)
+			}
+		}()
+		return ob.subscribe(NextFunc(func(event *Event) {
+			select {
+			case <-dstop:
+				//开始订阅防抖Observable，等到防抖Observable发出事件或者完成后，就发出现在的事件，期间则忽略任何元素
+				dstop = make(Stop)
+				go func(event *Event) {
+					f(event.Data).subscribe(NextFunc(func(event *Event) {
+						event.Target.Stop()
+					}), dstop)
+					sink.Push(event)
+				}(event)
+			default:
+			}
+		}), sink.stop)
+	}
+}
+
+//DebounceTime 按时间防抖动
+func (ob Observable) DebounceTime(duration time.Duration) Observable {
+	return func(sink *Observer) error {
+		debounce := false
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if !debounce {
+				debounce = true
+				time.AfterFunc(duration, func() {
+					sink.Push(event)
+					debounce = false
+				})
+			}
+		}), sink.stop)
 	}
 }

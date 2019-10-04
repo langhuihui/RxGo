@@ -73,3 +73,10 @@ func Do(f func(interface{})) Operator {
 		return source.Do(f)
 	}
 }
+
+//Filter
+func Filter(f func(interface{}) bool) Operator {
+	return func(source Observable) Observable {
+		return source.Filter(f)
+	}
+}

@@ -41,7 +41,11 @@
 **`Share`**
 **`StartWith`**
 **`Zip`**
-
+**`Filter`**
+**`Distinct`**
+**`DistinctUntilChanged`**
+**`Debounce`**
+**`DebounceTime`**
 ## 使用方法
 ### 链式调用方式
 ```go

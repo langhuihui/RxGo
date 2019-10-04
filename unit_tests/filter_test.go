@@ -67,3 +67,33 @@ func Test_SkipUntil(t *T) {
 		t.Log(event.Data)
 	}))
 }
+func Test_Filter(t *T) {
+	Range(0, 10).Filter(func(data interface{}) bool {
+		return data.(int)%2 == 0
+	}).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_Distinct(t *T) {
+	Merge(Range(0, 10), Range(1, 11)).Distinct().Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_DistinctUntilChanged(t *T) {
+	Merge(Range(0, 10), Range(1, 11)).DistinctUntilChanged().Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+
+func Test_Debounce(t *T) {
+	Interval(time.Second).Debounce(func(i interface{}) Observable {
+		return Timeout(time.Second * time.Duration(i.(int)))
+	}).Take(3).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_DebounceTime(t *T) {
+	Interval(time.Second).DebounceTime(time.Second * 2).Take(3).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
