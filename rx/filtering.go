@@ -152,9 +152,7 @@ func (ob Observable) Debounce(f func(interface{}) Observable) Observable {
 				//开始订阅防抖Observable，等到防抖Observable发出事件或者完成后，就发出现在的事件，期间则忽略任何元素
 				dstop = make(Stop)
 				go func(event *Event) {
-					f(event.Data).subscribe(NextFunc(func(event *Event) {
-						event.Target.Stop()
-					}), dstop)
+					f(event.Data).subscribe(NextFunc(justStop), dstop)
 					sink.Push(event)
 				}(event)
 			default:
@@ -174,6 +172,48 @@ func (ob Observable) DebounceTime(duration time.Duration) Observable {
 					sink.Push(event)
 					debounce = false
 				})
+			}
+		}), sink.stop)
+	}
+}
+
+//Throttle 节流阀
+func (ob Observable) Throttle(f func(interface{}) Observable) Observable {
+	return func(sink *Observer) error {
+		dstop := make(Stop)
+		close(dstop)
+		//最后要关闭中间可能订阅的防抖动Observable
+		defer func() {
+			select {
+			case <-dstop:
+			default:
+				close(dstop)
+			}
+		}()
+		return ob.subscribe(NextFunc(func(event *Event) {
+			select {
+			case <-dstop:
+				sink.Push(event)
+				dstop = make(Stop)
+				go f(event.Data).subscribe(NextFunc(justStop), dstop)
+			default:
+			}
+		}), sink.stop)
+	}
+}
+
+//ThrottleTime 按照时间来节流
+func (ob Observable) ThrottleTime(duration time.Duration) Observable {
+	return func(sink *Observer) error {
+		throttle := false
+		restore := func() {
+			throttle = false
+		}
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if !throttle {
+				throttle = true
+				sink.Push(event)
+				time.AfterFunc(duration, restore)
 			}
 		}), sink.stop)
 	}

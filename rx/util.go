@@ -9,3 +9,7 @@ func (ob Observable) Do(f func(interface{})) Observable {
 		}), sink.stop)
 	}
 }
+
+func justStop(event *Event) {
+	event.Target.Stop()
+}

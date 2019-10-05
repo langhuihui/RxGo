@@ -46,6 +46,8 @@
 **`DistinctUntilChanged`**
 **`Debounce`**
 **`DebounceTime`**
+**`Throttle`**
+**`ThrottleTime`**
 ## 使用方法
 ### 链式调用方式
 ```go

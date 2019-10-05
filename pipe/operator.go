@@ -2,6 +2,7 @@ package pipe
 
 import (
 	. "github.com/langhuihui/RxGo/rx"
+	"time"
 )
 
 //Take
@@ -78,5 +79,47 @@ func Do(f func(interface{})) Operator {
 func Filter(f func(interface{}) bool) Operator {
 	return func(source Observable) Observable {
 		return source.Filter(f)
+	}
+}
+
+//Distinct
+func Distinct() Operator {
+	return func(source Observable) Observable {
+		return source.Distinct()
+	}
+}
+
+//DistinctUntilChanged
+func DistinctUntilChanged() Operator {
+	return func(source Observable) Observable {
+		return source.DistinctUntilChanged()
+	}
+}
+
+//Debounce
+func Debounce(f func(interface{}) Observable) Operator {
+	return func(source Observable) Observable {
+		return source.Debounce(f)
+	}
+}
+
+//DebounceTime
+func DebounceTime(duration time.Duration) Operator {
+	return func(source Observable) Observable {
+		return source.DebounceTime(duration)
+	}
+}
+
+//Throttle
+func Throttle(f func(interface{}) Observable) Operator {
+	return func(source Observable) Observable {
+		return source.Throttle(f)
+	}
+}
+
+//ThrottleTime
+func ThrottleTime(duration time.Duration) Operator {
+	return func(source Observable) Observable {
+		return source.ThrottleTime(duration)
 	}
 }

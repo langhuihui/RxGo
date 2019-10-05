@@ -97,3 +97,15 @@ func Test_DebounceTime(t *T) {
 		t.Log(event.Data)
 	}))
 }
+func Test_Throttle(t *T) {
+	Interval(time.Second).Throttle(func(i interface{}) Observable {
+		return Timeout(time.Second * time.Duration(i.(int)))
+	}).Take(3).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_ThrottleTime(t *T) {
+	Interval(time.Second).ThrottleTime(time.Second * 2).Take(3).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
