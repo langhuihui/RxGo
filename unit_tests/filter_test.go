@@ -109,3 +109,13 @@ func Test_ThrottleTime(t *T) {
 		t.Log(event.Data)
 	}))
 }
+func Test_First(t *T) {
+	Timer(time.Second, time.Second).First().Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_Last(t *T) {
+	Timer(time.Second, time.Second).Take(2).Last().Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}

@@ -218,3 +218,69 @@ func (ob Observable) ThrottleTime(duration time.Duration) Observable {
 		}), sink.stop)
 	}
 }
+
+//ElementAt 取第几个元素
+func (ob Observable) ElementAt(index uint) Observable {
+	return func(sink *Observer) error {
+		var count uint = 0
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if count == index {
+				sink.Push(event)
+				sink.Stop()
+			} else {
+				count++
+			}
+		}), sink.stop)
+	}
+}
+
+//Find 查询符合条件的元素
+func (ob Observable) Find(f func(interface{}) bool) Observable {
+	return func(sink *Observer) error {
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if f(event.Data) {
+				sink.Push(event)
+				sink.Stop()
+			}
+		}), sink.stop)
+	}
+}
+
+//FindIndex 查找符合条件的元素的序号
+func (ob Observable) FindIndex(f func(interface{}) bool) Observable {
+	return func(sink *Observer) error {
+		index := 0
+		return ob.subscribe(NextFunc(func(event *Event) {
+			if f(event.Data) {
+				sink.Next(index)
+				sink.Stop()
+			} else {
+				index++
+			}
+		}), sink.stop)
+	}
+}
+
+//First 完成时返回第一个元素
+func (ob Observable) First() Observable {
+	return func(sink *Observer) error {
+		return ob.subscribe(NextFunc(func(event *Event) {
+			sink.Push(event)
+			sink.Stop()
+		}), sink.stop)
+	}
+}
+
+//Last 完成时返回最后一个元素
+func (ob Observable) Last() Observable {
+	return func(sink *Observer) error {
+		var last interface{}
+		defer func() {
+			sink.Next(last)
+			sink.Stop()
+		}()
+		return ob.subscribe(NextFunc(func(event *Event) {
+			last = event.Data
+		}), sink.stop)
+	}
+}

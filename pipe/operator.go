@@ -123,3 +123,59 @@ func ThrottleTime(duration time.Duration) Operator {
 		return source.ThrottleTime(duration)
 	}
 }
+
+//ElementAt
+func ElementAt(index uint) Operator {
+	return func(source Observable) Observable {
+		return source.ElementAt(index)
+	}
+}
+
+//Find
+func Find(f func(interface{}) bool) Operator {
+	return func(source Observable) Observable {
+		return source.Find(f)
+	}
+}
+
+//FindIndex
+func FindIndex(f func(interface{}) bool) Operator {
+	return func(source Observable) Observable {
+		return source.FindIndex(f)
+	}
+}
+
+//First
+func First() Operator {
+	return func(source Observable) Observable {
+		return source.First()
+	}
+}
+
+//Last
+func Last() Operator {
+	return func(source Observable) Observable {
+		return source.Last()
+	}
+}
+
+//Max
+func Max() Operator {
+	return func(source Observable) Observable {
+		return source.Max()
+	}
+}
+
+//Min
+func Min() Operator {
+	return func(source Observable) Observable {
+		return source.Min()
+	}
+}
+
+//Reduce
+func Reduce(f func(interface{}, interface{}) interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.Reduce(f)
+	}
+}

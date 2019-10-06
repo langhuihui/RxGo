@@ -30,9 +30,17 @@ func Interval(duration time.Duration) Observable {
 			case <-sink.stop:
 				return sink.err
 			case <-interval.C:
-				i++
 				sink.Next(i)
+				i++
 			}
 		}
+	}
+}
+
+//Timer 延迟+间隔
+func Timer(delay time.Duration, interval time.Duration) Observable {
+	return func(sink *Observer) error {
+		<-time.After(delay)
+		return Interval(interval)(sink)
 	}
 }

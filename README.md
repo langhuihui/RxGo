@@ -48,6 +48,12 @@
 **`DebounceTime`**
 **`Throttle`**
 **`ThrottleTime`**
+**`First`**
+**`Last`**
+**`Count`**
+**`Max`**
+**`Min`**
+**`Reduce`**
 ## 使用方法
 ### 链式调用方式
 ```go
