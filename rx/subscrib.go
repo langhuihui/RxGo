@@ -8,7 +8,9 @@ func (ob Observable) subscribe(onNext NextHandler, stop Stop) error {
 //subscribeAsync 对外异步订阅模式，返回一个可用于终止事件流的控制器,可以在未收到数据时也能终止事件流
 func (ob Observable) subscribeAsync(onNext NextHandler, onComplete func(error)) *Observer {
 	source := NewObserver(onNext, make(Stop))
-	go onComplete(ob(source))
+	go func() {
+		onComplete(ob(source))
+	}()
 	return source
 }
 

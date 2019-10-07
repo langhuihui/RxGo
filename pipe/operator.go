@@ -179,3 +179,45 @@ func Reduce(f func(interface{}, interface{}) interface{}) Operator {
 		return source.Reduce(f)
 	}
 }
+
+//Map
+func Map(f func(interface{}) interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.Map(f)
+	}
+}
+
+//MapTo
+func MapTo(data interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.MapTo(data)
+	}
+}
+
+//MergeMap
+func MergeMap(f func(interface{}) Observable, resultSelector func(interface{}, interface{}) interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.MergeMap(f, resultSelector)
+	}
+}
+
+//MergeMapTo
+func MergeMapTo(then Observable, resultSelector func(interface{}, interface{}) interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.MergeMap(then, resultSelector)
+	}
+}
+
+//SwitchMap
+func SwitchMap(f func(interface{}) Observable, resultSelector func(interface{}, interface{}) interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.SwitchMap(f, resultSelector)
+	}
+}
+
+//SwitchMapTo
+func SwitchMapTo(then Observable, resultSelector func(interface{}, interface{}) interface{}) Operator {
+	return func(source Observable) Observable {
+		return source.SwitchMapTo(then, resultSelector)
+	}
+}

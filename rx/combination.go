@@ -2,6 +2,7 @@ package rx
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 )
 
@@ -107,7 +108,9 @@ func CombineLatest(sources ...Observable) Observable {
 	count := len(sources)
 	NoData := errors.New("NoData")
 	return func(sink *Observer) error {
-		remain := int32(count)               //尚未有最新数据的源
+		remain := int32(count) //尚未有最新数据的源
+		wg := sync.WaitGroup{}
+		wg.Add(1)
 		live := int32(count)                 //尚没有完成的数据源
 		buffer := make([]interface{}, count) //待发送的数据缓存
 		e := &Event{buffer, sink}
@@ -127,7 +130,7 @@ func CombineLatest(sources ...Observable) Observable {
 				ob(observers[i])
 				//当有事件流完成后，我们把live减一，如果此时还有事件流从未发送过事件或者所有事件流都已经完成，则完成当前事件流
 				if atomic.AddInt32(&live, -1); remain > 0 || live == 0 {
-					sink.Stop()
+					wg.Done()
 				}
 			}(i)
 		}
@@ -136,7 +139,8 @@ func CombineLatest(sources ...Observable) Observable {
 				source.Stop()
 			}
 		}()
-		return sink.Wait()
+		wg.Wait()
+		return sink.err
 	}
 }
 

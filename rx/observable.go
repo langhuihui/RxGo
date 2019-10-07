@@ -72,9 +72,5 @@ func Empty() Observable {
 func Throw(err error) Observable {
 	return func(sink *Observer) error {
 		return err
-		//sink.OnNext(&Event{
-		//	err:     err,
-		//	Target: sink,
-		//})
 	}
 }
