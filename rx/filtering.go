@@ -15,9 +15,9 @@ func (ob Observable) Take(count uint) Observable {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			sink.Push(event)
 			if atomic.AddInt32(&remain, -1) == 0 {
-				sink.Stop()
+				sink.Complete()
 			}
-		}), sink.stop) //复用下游的stop信号
+		}), sink.complete) //复用下游的complete信号
 	}
 }
 
@@ -26,9 +26,9 @@ func (ob Observable) TakeUntil(until Observable) Observable {
 	return func(sink *Observer) error {
 		go until(NewObserver(NextFunc(func(event *Event) {
 			//获取到任何数据就让下游完成
-			sink.Stop()
-		}), sink.stop))
-		return ob(sink)
+			sink.Complete()
+		}), sink.complete))
+		return ob(NewObserver(NextFunc(sink.Push), sink.complete))
 	}
 }
 
@@ -39,10 +39,9 @@ func (ob Observable) TakeWhile(f func(interface{}) bool) Observable {
 			if f(event.Data) {
 				sink.Push(event)
 			} else {
-				sink.Stop()
-				//sink.Complete()
+				sink.Complete()
 			}
-		}), sink.stop)
+		}), sink.complete)
 	}
 }
 
@@ -58,7 +57,7 @@ func (ob Observable) Skip(count uint) Observable {
 				//使用下游的Observer代替本函数，使上游数据直接下发到下游
 				event.ChangeHandler(sink)
 			}
-		}), sink.stop) //复用下游的stop信号
+		}), sink.dispose) //复用下游的stop信号
 	}
 }
 
@@ -69,22 +68,22 @@ func (ob Observable) SkipWhile(f func(interface{}) bool) Observable {
 			if !f(event.Data) {
 				event.ChangeHandler(sink)
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
 //SkipUntil 直到开关事件流发出事件前一直跳过事件
 func (ob Observable) SkipUntil(until Observable) Observable {
 	return func(sink *Observer) error {
-		source := NewObserver(EmptyNext, sink.stop) //前期跳过所有数据
+		source := NewObserver(EmptyNext, sink.dispose) //前期跳过所有数据
 		untilc := NewObserver(NextFunc(func(event *Event) {
 			//获取到任何数据就对接上下游
 			source.next = sink.next
 			//本事件流历史使命已经完成，取消订阅
-			event.Target.Stop()
+			event.Target.Dispose()
 		}), make(Stop))
 		go until(untilc)
-		defer untilc.Stop() //上游完成后则终止这个订阅，如果已经终止重复Stop没有影响
+		defer untilc.Dispose() //上游完成后则终止这个订阅，如果已经终止重复Stop没有影响
 		return ob(source)
 	}
 }
@@ -92,7 +91,7 @@ func (ob Observable) SkipUntil(until Observable) Observable {
 //IgnoreElements 忽略所有元素
 func (ob Observable) IgnoreElements() Observable {
 	return func(sink *Observer) error {
-		return ob.subscribe(EmptyNext, sink.stop)
+		return ob.subscribe(EmptyNext, sink.dispose)
 	}
 }
 
@@ -103,7 +102,7 @@ func (ob Observable) Filter(f func(data interface{}) bool) Observable {
 			if f(event.Data) {
 				sink.Push(event)
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -111,12 +110,17 @@ func (ob Observable) Filter(f func(data interface{}) bool) Observable {
 func (ob Observable) Distinct() Observable {
 	return func(sink *Observer) error {
 		buffer := make(map[interface{}]bool)
-		return ob.subscribe(NextFunc(func(event *Event) {
-			if _, ok := buffer[event.Data]; !ok {
-				buffer[event.Data] = true
-				sink.Push(event)
+		next := make(NextChan)
+		go func() {
+			for event := range next {
+				if _, ok := buffer[event.Data]; !ok {
+					buffer[event.Data] = true
+					sink.Push(event)
+				}
 			}
-		}), sink.stop)
+		}()
+		defer close(next)
+		return ob.subscribe(next, sink.dispose)
 	}
 }
 
@@ -129,7 +133,7 @@ func (ob Observable) DistinctUntilChanged() Observable {
 				lastData = event.Data
 				sink.Push(event)
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -157,7 +161,7 @@ func (ob Observable) Debounce(f func(interface{}) Observable) Observable {
 				}(event)
 			default:
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -173,7 +177,7 @@ func (ob Observable) DebounceTime(duration time.Duration) Observable {
 					debounce = false
 				})
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -198,7 +202,7 @@ func (ob Observable) Throttle(f func(interface{}) Observable) Observable {
 				go f(event.Data).subscribe(NextFunc(justStop), dstop)
 			default:
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -215,7 +219,7 @@ func (ob Observable) ThrottleTime(duration time.Duration) Observable {
 				sink.Push(event)
 				time.AfterFunc(duration, restore)
 			}
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -226,11 +230,11 @@ func (ob Observable) ElementAt(index uint) Observable {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			if count == index {
 				sink.Push(event)
-				sink.Stop()
+				sink.Complete()
 			} else {
 				count++
 			}
-		}), sink.stop)
+		}), sink.complete)
 	}
 }
 
@@ -240,9 +244,9 @@ func (ob Observable) Find(f func(interface{}) bool) Observable {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			if f(event.Data) {
 				sink.Push(event)
-				sink.Stop()
+				sink.Complete()
 			}
-		}), sink.stop)
+		}), sink.complete)
 	}
 }
 
@@ -253,11 +257,11 @@ func (ob Observable) FindIndex(f func(interface{}) bool) Observable {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			if f(event.Data) {
 				sink.Next(index)
-				sink.Stop()
+				sink.Complete()
 			} else {
 				index++
 			}
-		}), sink.stop)
+		}), sink.complete)
 	}
 }
 
@@ -266,8 +270,8 @@ func (ob Observable) First() Observable {
 	return func(sink *Observer) error {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			sink.Push(event)
-			sink.Stop()
-		}), sink.stop)
+			sink.Complete()
+		}), sink.complete)
 	}
 }
 
@@ -277,10 +281,10 @@ func (ob Observable) Last() Observable {
 		var last interface{}
 		defer func() {
 			sink.Next(last)
-			sink.Stop()
+			sink.Complete()
 		}()
 		return ob.subscribe(NextFunc(func(event *Event) {
 			last = event.Data
-		}), sink.stop)
+		}), sink.complete)
 	}
 }

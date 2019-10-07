@@ -8,7 +8,7 @@ func Timeout(duration time.Duration) Observable {
 		timeout := time.After(duration)
 		for {
 			select {
-			case <-sink.stop:
+			case <-sink.dispose:
 				return nil
 			case data := <-timeout:
 				sink.Next(data)
@@ -27,7 +27,7 @@ func Interval(duration time.Duration) Observable {
 		defer interval.Stop()
 		for {
 			select {
-			case <-sink.stop:
+			case <-sink.dispose:
 				return sink.err
 			case <-interval.C:
 				sink.Next(i)

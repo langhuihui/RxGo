@@ -2,7 +2,6 @@ package rx
 
 import (
 	"errors"
-	"sync"
 	"sync/atomic"
 )
 
@@ -10,18 +9,17 @@ import (
 func Merge(sources ...Observable) Observable {
 	count := len(sources)
 	return func(sink *Observer) (err error) {
-		remain := int32(count)
-		source := NewObserver(NextFunc(sink.Push), make(Stop))
+		live := int32(count)
+		source := NewObserver(NextFunc(sink.Push), sink.complete)
 		for _, ob := range sources {
 			go func(ob Observable) {
-				ob(source)                             //复用相同的Observer
-				if atomic.AddInt32(&remain, -1) == 0 { //如果订阅的事件流全部都已经完成则完成当前事件流
-					sink.Stop()
+				ob(source)
+				if atomic.AddInt32(&live, -1); live == 0 {
+					sink.Complete()
 				}
 			}(ob)
 		}
-		defer source.Stop()
-		return sink.Wait()
+		return sink.Wait(sink.Complete)
 	}
 }
 
@@ -31,7 +29,7 @@ func Concat(sources ...Observable) Observable {
 		for _, ob := range sources {
 			err = ob(sink)
 			//如果出现取消订阅或者出现错误，都进行完成动作，否则是正常完成，接着订阅下一个数据源
-			if sink.IsStopped() || err != nil {
+			if sink.IsDisposed() || err != nil {
 				return err
 			}
 		}
@@ -46,10 +44,10 @@ func (ob Observable) share(childrenCtrl <-chan *Observer) {
 	for {
 		select {
 		case child := <-childrenCtrl:
-			if child.IsStopped() {
+			if child.IsDisposed() {
 				children.remove(child)
 				if children.isEmpty() { //最后一个子观察者退出则取消订阅上游事件流
-					source.Stop()
+					source.Dispose()
 				}
 			} else {
 				children.add(child)
@@ -68,7 +66,9 @@ func (ob Observable) share(childrenCtrl <-chan *Observer) {
 				}
 			} else { //上游事件流已完成，通知所有子观察者完成
 				for sink := range children {
-					sink.Error(sourceError)
+					sink.err = sourceError
+					sink.Complete()
+					children.remove(sink)
 				}
 			}
 		}
@@ -81,10 +81,9 @@ func (ob Observable) Share() Observable {
 	go ob.share(childrenCtrl)
 	return func(sink *Observer) error {
 		childrenCtrl <- sink //加入观察者
-		defer func() {
+		return sink.Wait(func() {
 			childrenCtrl <- sink //移除观察者
-		}()
-		return sink.Wait()
+		})
 	}
 }
 
@@ -94,7 +93,7 @@ func (ob Observable) StartWith(xs ...interface{}) Observable {
 		for _, data := range xs {
 			sink.Next(data)
 			//如果在响应事件中终止了事件流，则函数返回退出
-			if sink.IsStopped() {
+			if sink.IsDisposed() {
 				return sink.err
 			}
 		}
@@ -108,17 +107,14 @@ func CombineLatest(sources ...Observable) Observable {
 	count := len(sources)
 	NoData := errors.New("NoData")
 	return func(sink *Observer) error {
-		remain := int32(count) //尚未有最新数据的源
-		wg := sync.WaitGroup{}
-		wg.Add(1)
+		remain := int32(count)               //尚未有最新数据的源
 		live := int32(count)                 //尚没有完成的数据源
 		buffer := make([]interface{}, count) //待发送的数据缓存
 		e := &Event{buffer, sink}
-		observers := make([]*Observer, count)
 		for i, ob := range sources {
 			buffer[i] = NoData //将该坑位设置为尚未填充数据状态
 			go func(i int) {
-				observers[i] = NewObserver(NextFunc(func(event *Event) {
+				ob(NewObserver(NextFunc(func(event *Event) {
 					if buffer[i] == NoData {
 						atomic.AddInt32(&remain, -1)
 					}
@@ -126,21 +122,14 @@ func CombineLatest(sources ...Observable) Observable {
 					if remain == 0 {       //当所有事件流都产生了事件后，就发送事件
 						sink.Push(e)
 					}
-				}), make(Stop))
-				ob(observers[i])
+				}), sink.complete))
 				//当有事件流完成后，我们把live减一，如果此时还有事件流从未发送过事件或者所有事件流都已经完成，则完成当前事件流
 				if atomic.AddInt32(&live, -1); remain > 0 || live == 0 {
-					wg.Done()
+					sink.Complete()
 				}
 			}(i)
 		}
-		defer func() {
-			for _, source := range observers {
-				source.Stop()
-			}
-		}()
-		wg.Wait()
-		return sink.err
+		return sink.Wait(sink.Complete)
 	}
 }
 
@@ -164,8 +153,8 @@ func Zip(sources ...Observable) Observable {
 						}
 						sink.Push(e)
 					}
-				}), sink.stop))
-				sink.Stop() //任意一个事件源完成就导致整个事件流停止
+				}), sink.complete))
+				sink.Complete() //任意一个事件源完成就导致整个事件流停止
 			}(i)
 		}
 		defer func() {
@@ -174,7 +163,7 @@ func Zip(sources ...Observable) Observable {
 				close(dataChan)
 			}
 		}()
-		return sink.Wait()
+		return sink.Wait(sink.Complete) //用户取消订阅，会导致取消所有事件流的订阅
 	}
 }
 
@@ -194,7 +183,7 @@ func Race(sources ...Observable) Observable {
 				//其他事件流此时可以统统取消
 				for _, ob := range observers {
 					if ob != event.Target {
-						ob.Stop()
+						ob.Dispose()
 					}
 				}
 				//转发事件
@@ -210,15 +199,10 @@ func Race(sources ...Observable) Observable {
 				//如果有一个事件流完成，但从未发出过事件比如Empty，或者这个事件流就是最快的事件流，那么就导致事件流完成
 				if winner != nil || winner == observer {
 					sink.err = err
-					sink.Stop()
+					sink.Complete()
 				}
 			}(observers[i])
 		}
-		defer func() {
-			for _, ob := range observers {
-				ob.Stop()
-			}
-		}()
-		return sink.Wait()
+		return sink.Wait(sink.Complete)
 	}
 }

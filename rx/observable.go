@@ -10,7 +10,7 @@ func FromSlice(slice []interface{}) Observable {
 	return func(sink *Observer) error {
 		for _, data := range slice {
 			sink.Next(data)
-			if sink.IsStopped() {
+			if sink.IsDisposed() {
 				break
 			}
 		}
@@ -29,7 +29,7 @@ func FromChan(source chan interface{}) Observable {
 	return func(sink *Observer) error {
 		for {
 			select {
-			case <-sink.stop:
+			case <-sink.dispose:
 				return sink.err
 			case data, ok := <-source:
 				if ok {
@@ -46,7 +46,7 @@ func FromChan(source chan interface{}) Observable {
 func Range(start int, count uint) Observable {
 	end := start + int(count)
 	return func(sink *Observer) error {
-		for i := start; i < end && !sink.IsStopped(); i++ {
+		for i := start; i < end && !sink.IsDisposed(); i++ {
 			sink.Next(i)
 		}
 		return sink.err
@@ -56,7 +56,7 @@ func Range(start int, count uint) Observable {
 //Never 永不回答
 func Never() Observable {
 	return func(sink *Observer) error {
-		<-sink.stop
+		<-sink.dispose
 		return sink.err
 	}
 }

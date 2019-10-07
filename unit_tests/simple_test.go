@@ -100,3 +100,16 @@ func Test_Do(t *T) {
 		t.Log(i)
 	}).Subscribe(EmptyNext)
 }
+
+func Test_Map(t *T) {
+	Range(0, 10).Map(func(data interface{}) interface{} {
+		return data.(int) * 2
+	}).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_MapTo(t *T) {
+	Range(0, 10).MapTo("hello").Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}

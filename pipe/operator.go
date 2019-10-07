@@ -204,7 +204,7 @@ func MergeMap(f func(interface{}) Observable, resultSelector func(interface{}, i
 //MergeMapTo
 func MergeMapTo(then Observable, resultSelector func(interface{}, interface{}) interface{}) Operator {
 	return func(source Observable) Observable {
-		return source.MergeMap(then, resultSelector)
+		return source.MergeMapTo(then, resultSelector)
 	}
 }
 

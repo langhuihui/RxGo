@@ -7,7 +7,7 @@ func (ob Observable) Map(f func(interface{}) interface{}) Observable {
 	return func(sink *Observer) error {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			sink.Next(f(event.Data))
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
@@ -16,14 +16,15 @@ func (ob Observable) MapTo(data interface{}) Observable {
 	return func(sink *Observer) error {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			sink.Next(data)
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
 //MergeMap 将元素映射成事件流并合并其中的元素
 func (ob Observable) MergeMap(f func(interface{}) Observable, resultSelector func(interface{}, interface{}) interface{}) Observable {
-	return func(sink *Observer) error {
+	return func(sink *Observer) (err error) {
 		wg := sync.WaitGroup{}
+		wg.Add(1) //母事件流等待信号
 		subMap := func(data interface{}) {
 			f(data)(sink)
 			wg.Done()
@@ -32,16 +33,19 @@ func (ob Observable) MergeMap(f func(interface{}) Observable, resultSelector fun
 			subMap = func(data interface{}) {
 				f(data).subscribe(NextFunc(func(event *Event) {
 					sink.Next(resultSelector(data, event.Data))
-				}), sink.stop)
+				}), sink.dispose)
 				wg.Done()
 			}
 		}
-		err := ob.subscribe(NextFunc(func(event *Event) {
-			wg.Add(1)
-			go subMap(event.Data)
-		}), sink.stop)
+		go func() {
+			err = ob.subscribe(NextFunc(func(event *Event) {
+				wg.Add(1)
+				go subMap(event.Data)
+			}), sink.dispose)
+			wg.Done()
+		}()
 		wg.Wait() //等待所有子事件流完成后再完成
-		return err
+		return
 	}
 }
 
@@ -56,32 +60,39 @@ func (ob Observable) MergeMapTo(then Observable, resultSelector func(interface{}
 func (ob Observable) SwitchMap(f func(interface{}) Observable, resultSelector func(interface{}, interface{}) interface{}) Observable {
 	return func(sink *Observer) error {
 		var currentSub *Observer
-		subMap := func(data interface{}) {
+		mainDone := false //母事件流是否完成
+		subMap := func(data interface{}, currentSub *Observer) {
 			f(data)(currentSub)
-			currentSub.Stop() //关闭Observer用来触发主事件流完成
-		}
-		err := ob.subscribe(NextFunc(func(event *Event) {
-			if currentSub != nil { //关闭上一个子事件流
-				currentSub.Stop()
+			if mainDone {
+				sink.Complete() //关闭Observer用来触发主事件流完成
 			}
-			if resultSelector != nil {
-				data := event.Data
-				currentSub = NewObserver(NextFunc(func(event *Event) {
-					sink.Next(resultSelector(data, event.Data))
-				}), make(Stop))
+		}
+		go func() {
+			ob.subscribe(NextFunc(func(event *Event) {
+				if currentSub != nil { //关闭上一个子事件流
+					currentSub.Dispose()
+				}
+				if resultSelector != nil {
+					data := event.Data
+					currentSub = NewObserver(NextFunc(func(event *Event) {
+						sink.Next(resultSelector(data, event.Data))
+					}), make(Stop))
+				} else {
+					currentSub = NewObserver(NextFunc(sink.Push), make(Stop))
+				}
+				go subMap(event.Data, currentSub)
+			}), sink.dispose)
+			if currentSub == nil { //没有产生任何元素
+				sink.Complete()
 			} else {
-				currentSub = NewObserver(NextFunc(sink.Push), make(Stop))
+				mainDone = true
 			}
-			go subMap(event.Data)
-		}), sink.stop)
-		if currentSub != nil {
-			if sink.IsStopped() { //用户主动取消订阅
-				currentSub.Stop()
-			} else { //正常结束，需要等待子事件流完成
-				<-currentSub.stop
+		}()
+		return sink.Wait(func() {
+			if currentSub != nil {
+				currentSub.Dispose()
 			}
-		}
-		return err
+		})
 	}
 }
 

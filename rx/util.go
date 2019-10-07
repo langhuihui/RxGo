@@ -6,10 +6,10 @@ func (ob Observable) Do(f func(interface{})) Observable {
 		return ob.subscribe(NextFunc(func(event *Event) {
 			f(event.Data)
 			sink.Push(event)
-		}), sink.stop)
+		}), sink.dispose)
 	}
 }
 
 func justStop(event *Event) {
-	event.Target.Stop()
+	event.Target.Dispose()
 }
