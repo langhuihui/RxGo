@@ -7,6 +7,7 @@ import (
 )
 
 func Test_Take(t *T) {
+	Of(1).Take(0).Subscribe(nil)
 	count := 0
 	Of(1, 2, 3, 4).Take(2).Subscribe(NextFunc(func(event *Event) {
 		t.Log(event.Data)
@@ -21,6 +22,7 @@ func Test_Take(t *T) {
 }
 
 func Test_Skip(t *T) {
+	Of(1).Skip(0).Subscribe(NextFunc(func(event *Event) { t.Log(event.Data) }))
 	count := 0
 	Of(1, 2, 3, 4).Skip(2).Subscribe(NextFunc(func(event *Event) {
 		t.Log(event.Data)
@@ -116,6 +118,25 @@ func Test_First(t *T) {
 }
 func Test_Last(t *T) {
 	Timer(time.Second, time.Second).Take(2).Last().Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_ElementAt(t *T) {
+	Range(0, 10).ElementAt(5).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_Find(t *T) {
+	Range(0, 10).Find(func(i interface{}) bool {
+		return i.(int) == 5
+	}).Subscribe(NextFunc(func(event *Event) {
+		t.Log(event.Data)
+	}))
+}
+func Test_FindIndex(t *T) {
+	Range(1, 10).FindIndex(func(i interface{}) bool {
+		return i.(int) == 5
+	}).Subscribe(NextFunc(func(event *Event) {
 		t.Log(event.Data)
 	}))
 }

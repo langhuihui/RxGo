@@ -212,7 +212,9 @@ func Race(sources ...Observable) Observable {
 					//转发事件
 					sink.Push(event)
 					//移交接收器
-					event.ChangeHandler(sink)
+					winner.next = NextFunc(sink.Push)
+				} else if winner == event.Target {
+					sink.Push(event)
 				}
 			}
 		}

@@ -54,6 +54,12 @@
 **`Max`**
 **`Min`**
 **`Reduce`**
+**`Map`**
+**`MapTo`**
+**`MergeMap`**
+**`MergeMapTo`**
+**`SwitchMap`**
+**`SwitchMapTo`**
 ## 使用方法
 ### 链式调用方式
 ```go
@@ -183,25 +189,31 @@ type Observable func(*Observer) error
 ```go
 type Stop chan bool
 type Observer struct {
-	next NextHandler //缓存当前的Handler，后续可以被替换
-	stop     Stop     //取消订阅的信号，只用来close
-	err      error    //缓存当前错误
+	next     NextHandler //缓存当前的NextHandler，后续可以被替换
+	dispose  Stop        //取消订阅的信号，只用来close
+	complete Stop        //用于发出完成信号
+	err      error       //缓存当前的错误
 }
 ```
 该控制器为一个结构体，其中next记录了当前的NextHandler，
 
-在任何时候，如果关闭了stop这个channel，就意味着**取消订阅**。
+在任何时候，如果关闭了dispose这个channel，就意味着**取消订阅**。
 ```go
-//Stop 取消订阅
-func (c *Observer) Stop() {
-	if !c.IsStopped() {
-		close(c.stop)
+//Dispose 取消订阅
+func (c *Observer) Dispose() {
+	select {
+	case <-c.dispose:
+	default:
+		close(c.dispose)
 	}
 }
-//IsStopped 判断是否已经取消订阅
-func (c *Observer) IsStopped() bool {
+
+//Aborted 判断是否已经取消订阅或者已完成
+func (c *Observer) Aborted() bool {
 	select {
-	case <-c.stop:
+	case <-c.dispose:
+		return true
+	case <-c.complete:
 		return true
 	default:
 		return false
@@ -246,12 +258,13 @@ func (next NextChan) OnNext(event *Event) {
 ```
 ## 实现案例TakeUntil
 ```go
+//TakeUntil 一直获取事件直到unitl传来事件为止
 func (ob Observable) TakeUntil(until Observable) Observable {
 	return func(sink *Observer) error {
-		go until(NewObserver(NextFunc(func(event *Event) {
+		go until(sink.New3(NextFunc(func(event *Event) {
 			//获取到任何数据就让下游完成
-			sink.Stop()
-		}), sink.stop))
+			sink.Complete() //由于复用了complete信号，所以会导致所有复用complete的事件流完成
+		})))
 		return ob(sink)
 	}
 }
@@ -262,8 +275,8 @@ TakeUnitl的用途是，传入一个until事件源，当这个until事件源接�
 
 几大实现细节：
 1. 订阅until事件源，通过go关键字创建goroutine防止阻塞当前goroutine
-2. 使用函数式NextHandler，用户接受来自until事件源的事件，一旦接受任何事件，就调用sink.Stop()来使得所有使用该关闭channel（此处为sink.stop)的事件源全部取消订阅，并且导致事件源函数返回
-3. 订阅until事件源的Observer复用了sink.stop,当用户在代码中取消了订阅，就会引发该until事件源的取消订阅行为
+2. 使用函数式NextHandler，用户接受来自until事件源的事件，一旦接受任何事件，就调用sink.Complete()来使得当前事件流完成
+3. 订阅until事件源的Observer（sink.New3创建)复用了sink.dispose和sink.complete两个信号,当用户在代码中取消了订阅，就会引发该until事件源的取消订阅行为
 4. 最后一步是订阅上游事件源，我们不创建新的Observer，而直接把下游的Observer传入，避免了不必要的转发逻辑
 5. 任何情况取消订阅，或者上游事件源完成都可以使得事件源函数返回，接着TakeUntil函数也会返回,即意味着完成
 6. until事件源的完成或者错误，都将忽略，所以我们没有去获取until函数返回值

@@ -28,7 +28,7 @@ func (ob Observable) TakeUntil(until Observable) Observable {
 			//获取到任何数据就让下游完成
 			sink.Complete() //由于复用了complete信号，所以会导致所有复用complete的事件流完成
 		})))
-		return ob(sink.New3(NextFunc(sink.Push)))
+		return ob(sink)
 	}
 }
 
@@ -144,7 +144,7 @@ func (ob Observable) Debounce(f func(interface{}) Observable) Observable {
 		var throttle *Observer
 		go func() {
 			for event := range throttles {
-				f(event)(throttle)
+				f(event.Data)(throttle)
 				sink.Push(event)
 				throttle.Complete()
 			}
@@ -181,7 +181,7 @@ func (ob Observable) Throttle(f func(interface{}) Observable) Observable {
 		var throttle *Observer
 		go func() {
 			for event := range throttles {
-				f(event)(throttle)
+				f(event.Data)(throttle)
 				throttle.Complete()
 			}
 		}()
