@@ -10,6 +10,8 @@ func Timeout(duration time.Duration) Observable {
 			select {
 			case <-sink.dispose:
 				return nil
+			case <-sink.complete:
+				return nil
 			case data := <-timeout:
 				sink.Next(data)
 				//sink.Complete()
@@ -28,7 +30,9 @@ func Interval(duration time.Duration) Observable {
 		for {
 			select {
 			case <-sink.dispose:
-				return sink.err
+				return nil
+			case <-sink.complete:
+				return nil
 			case <-interval.C:
 				sink.Next(i)
 				i++

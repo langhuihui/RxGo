@@ -5,18 +5,18 @@ import "sync"
 //Map 对元素做一层映射（转换）
 func (ob Observable) Map(f func(interface{}) interface{}) Observable {
 	return func(sink *Observer) error {
-		return ob.subscribe(NextFunc(func(event *Event) {
+		return ob(sink.New3(NextFunc(func(event *Event) {
 			sink.Next(f(event.Data))
-		}), sink.dispose)
+		})))
 	}
 }
 
 //MapTo 映射成一个固定值
 func (ob Observable) MapTo(data interface{}) Observable {
 	return func(sink *Observer) error {
-		return ob.subscribe(NextFunc(func(event *Event) {
+		return ob(sink.New3(NextFunc(func(event *Event) {
 			sink.Next(data)
-		}), sink.dispose)
+		})))
 	}
 }
 
@@ -31,17 +31,17 @@ func (ob Observable) MergeMap(f func(interface{}) Observable, resultSelector fun
 		}
 		if resultSelector != nil { //使用结果选择器
 			subMap = func(data interface{}) {
-				f(data).subscribe(NextFunc(func(event *Event) {
+				f(data)(sink.New3(NextFunc(func(event *Event) {
 					sink.Next(resultSelector(data, event.Data))
-				}), sink.dispose)
+				})))
 				wg.Done()
 			}
 		}
 		go func() {
-			err = ob.subscribe(NextFunc(func(event *Event) {
+			err = ob(sink.New3(NextFunc(func(event *Event) {
 				wg.Add(1)
 				go subMap(event.Data)
-			}), sink.dispose)
+			})))
 			wg.Done()
 		}()
 		wg.Wait() //等待所有子事件流完成后再完成
@@ -68,31 +68,27 @@ func (ob Observable) SwitchMap(f func(interface{}) Observable, resultSelector fu
 			}
 		}
 		go func() {
-			ob.subscribe(NextFunc(func(event *Event) {
+			ob(sink.New3(NextFunc(func(event *Event) {
 				if currentSub != nil { //关闭上一个子事件流
-					currentSub.Dispose()
+					currentSub.Complete()
 				}
 				if resultSelector != nil {
 					data := event.Data
-					currentSub = NewObserver(NextFunc(func(event *Event) {
+					currentSub = sink.New1(NextFunc(func(event *Event) {
 						sink.Next(resultSelector(data, event.Data))
-					}), make(Stop))
+					}))
 				} else {
-					currentSub = NewObserver(NextFunc(sink.Push), make(Stop))
+					currentSub = sink.New1(NextFunc(sink.Push))
 				}
 				go subMap(event.Data, currentSub)
-			}), sink.dispose)
+			})))
 			if currentSub == nil { //没有产生任何元素
 				sink.Complete()
 			} else {
 				mainDone = true
 			}
 		}()
-		return sink.Wait(func() {
-			if currentSub != nil {
-				currentSub.Dispose()
-			}
-		})
+		return sink.Wait()
 	}
 }
 
