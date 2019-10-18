@@ -6,11 +6,10 @@ import "time"
 func Timeout(duration time.Duration) Observable {
 	return func(sink *Observer) error {
 		timeout := time.After(duration)
+		dispose := sink.AddDisposeChan()
 		for {
 			select {
-			case <-sink.dispose:
-				return nil
-			case <-sink.complete:
+			case <-dispose:
 				return nil
 			case data := <-timeout:
 				sink.Next(data)
@@ -25,13 +24,12 @@ func Timeout(duration time.Duration) Observable {
 func Interval(duration time.Duration) Observable {
 	return func(sink *Observer) error {
 		interval := time.NewTicker(duration)
+		dispose := sink.AddDisposeChan()
 		i := 0
 		defer interval.Stop()
 		for {
 			select {
-			case <-sink.dispose:
-				return nil
-			case <-sink.complete:
+			case <-dispose:
 				return nil
 			case <-interval.C:
 				sink.Next(i)

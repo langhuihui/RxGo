@@ -65,10 +65,10 @@ func Test_Never(t *T) {
 
 func Test_Pipe(t *T) {
 	nextChan := make(NextChan)
-	Of(1, 3, 4, 5).Pipe(pipe.Skip(1), pipe.Take(2)).SubscribeAsync(nextChan, func() {
-		close(nextChan)
-	}, func(e error) {
+	Of(1, 3, 4, 5).Pipe(pipe.Skip(1), pipe.Take(2)).SubscribeAsync(nextChan, func(e error) {
 		t.FailNow()
+		close(nextChan)
+	}, func() {
 		close(nextChan)
 	})
 	event := <-nextChan

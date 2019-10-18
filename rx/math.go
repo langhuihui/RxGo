@@ -7,9 +7,9 @@ func (ob Observable) Count() Observable {
 		defer func() {
 			sink.Next(count)
 		}()
-		return ob(sink.New3(NextFunc(func(event *Event) {
+		return ob(FuncObserver(func(event *Event) {
 			count++
-		})))
+		}, sink))
 	}
 }
 
@@ -20,11 +20,11 @@ func (ob Observable) Max() Observable {
 		defer func() {
 			sink.Next(max)
 		}()
-		return ob(sink.New3(NextFunc(func(event *Event) {
+		return ob(FuncObserver(func(event *Event) {
 			if data := event.Data.(int); data > max {
 				max = data
 			}
-		})))
+		}, sink))
 	}
 }
 
@@ -35,11 +35,11 @@ func (ob Observable) Min() Observable {
 		defer func() {
 			sink.Next(min)
 		}()
-		return ob(sink.New3(NextFunc(func(event *Event) {
+		return ob(FuncObserver(func(event *Event) {
 			if data := event.Data.(int); data < min {
 				min = data
 			}
-		})))
+		}, sink))
 	}
 }
 
@@ -53,9 +53,9 @@ func (ob Observable) Reduce(f func(interface{}, interface{}) interface{}) Observ
 		aacNext := func(event *Event) {
 			aac = f(aac, event.Data)
 		}
-		return ob(sink.New3(NextFunc(func(event *Event) {
+		return ob(FuncObserver(func(event *Event) {
 			aac = event.Data
 			event.Target.next = NextFunc(aacNext)
-		})))
+		}, sink))
 	}
 }

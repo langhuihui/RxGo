@@ -1,7 +1,7 @@
 package rx
 
 //Subject 可以手动发送数据
-func Subject(input chan interface{}) Observable {
+func Subject(input <-chan interface{}) Observable {
 	return FromChan(input).Share()
 }
 
@@ -10,8 +10,8 @@ func FromSlice(slice []interface{}) Observable {
 	return func(sink *Observer) error {
 		for _, data := range slice {
 			sink.Next(data)
-			if sink.Aborted() {
-				break
+			if sink.disposed {
+				return nil
 			}
 		}
 		return sink.err
@@ -24,13 +24,12 @@ func Of(array ...interface{}) Observable {
 }
 
 //FromChan 把一个chan转换成事件流
-func FromChan(source chan interface{}) Observable {
+func FromChan(source <-chan interface{}) Observable {
 	return func(sink *Observer) error {
+		dispose := sink.AddDisposeChan()
 		for {
 			select {
-			case <-sink.dispose:
-				return sink.err
-			case <-sink.complete:
+			case <-dispose:
 				return sink.err
 			case data, ok := <-source:
 				if ok {
@@ -47,7 +46,7 @@ func FromChan(source chan interface{}) Observable {
 func Range(start int, count uint) Observable {
 	end := start + int(count)
 	return func(sink *Observer) error {
-		for i := start; i < end && !sink.Aborted(); i++ {
+		for i := start; i < end && !sink.disposed; i++ {
 			sink.Next(i)
 		}
 		return sink.err
@@ -57,7 +56,8 @@ func Range(start int, count uint) Observable {
 //Never 永不回答
 func Never() Observable {
 	return func(sink *Observer) error {
-		return sink.Wait()
+		<-sink.AddDisposeChan()
+		return sink.err
 	}
 }
 
