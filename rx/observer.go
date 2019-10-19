@@ -7,8 +7,7 @@ type Stop chan bool
 
 //Observer 用于沟通上下游之间的桥梁，可向下发送数据，向上取消订阅
 type Observer struct {
-	next NextHandler //缓存当前的NextHandler，后续可以被替换
-	//dispose  DisposeHandler //取消订阅的信号，只用来close
+	next        NextHandler      //缓存当前的NextHandler，后续可以被替换
 	disposed    bool             //是否已经取消
 	disposeList []DisposeHandler //缓存的DisposeHandler
 	err         error            //缓存当前的错误

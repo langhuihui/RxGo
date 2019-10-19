@@ -67,7 +67,7 @@ import (
     . "github.com/langhuihui/RxGo/rx"
 )
 func main(){
-    err := Of(1, 2, 3, 4).Take(2).Subscribe(ObserverFunc(func(event *Event) {
+    err := Of(1, 2, 3, 4).Take(2).Subscribe(NextFunc(func(event *Event) {
         
     }))
 }
@@ -79,7 +79,7 @@ import (
     . "github.com/langhuihui/RxGo/pipe"
 )
 func main(){
-    err := Of(1, 2, 3, 4).Pipe(Skip(1),Take(2)).Subscribe(ObserverFunc(func(event *Event) {
+    err := Of(1, 2, 3, 4).Pipe(Skip(1),Take(2)).Subscribe(NextFunc(func(event *Event) {
         
     }))
 }
@@ -119,7 +119,7 @@ func MyObservable (sink *Control) error {
 }
 func main(){
     ob := Observable(MyObservable)
-    ob.Subscribe(ObserverFunc(func(event *Event) {
+    ob.Subscribe(NextFunc(func(event *Event) {
         
     }))
 }
@@ -187,45 +187,38 @@ type Observable func(*Observer) error
 
 ### 观察者对象`Observer`
 ```go
-type Stop chan bool
 type Observer struct {
-	next     NextHandler //缓存当前的NextHandler，后续可以被替换
-	dispose  Stop        //取消订阅的信号，只用来close
-	complete Stop        //用于发出完成信号
-	err      error       //缓存当前的错误
+	next NextHandler //缓存当前的NextHandler，后续可以被替换
+	disposed    bool             //是否已经取消
+	disposeList []DisposeHandler //缓存的DisposeHandler
+	err         error            //缓存当前的错误
+	lock        sync.Mutex       //用于Dispose的锁
 }
 ```
 该控制器为一个结构体，其中next记录了当前的NextHandler，
 
-在任何时候，如果关闭了dispose这个channel，就意味着**取消订阅**。
+**取消订阅**的行为是设置标志位，然后级联调用被缓存进来的DisposeHandler。
+这些DisposeHandler都是由上由Observable设置的，用来释放资源。
 ```go
 //Dispose 取消订阅
 func (c *Observer) Dispose() {
-	select {
-	case <-c.dispose:
-	default:
-		close(c.dispose)
+	c.lock.Lock()
+	if c.disposed {
+		return
 	}
-}
-
-//Aborted 判断是否已经取消订阅或者已完成
-func (c *Observer) Aborted() bool {
-	select {
-	case <-c.dispose:
-		return true
-	case <-c.complete:
-		return true
-	default:
-		return false
+	c.disposed = true
+	c.lock.Unlock()
+	for _, handler := range c.disposeList {
+		handler.Dispose()
 	}
 }
 ```
 
-由于Channel的close可以引发所有读取该Channel的阻塞行为唤醒，所以可以在不同层级复用该channel
-
-并且，由于已经close的channel可以反复读取以取得是否close的状态信息，所以不需要再额外记录
-
 `Observer`对象为`Observable`和事件处理逻辑共同持有，是二者沟通的桥梁
+
+之所以如此设计，是因为Observable如果返回结构体会使得设计变复杂，Golang没有继承，所以不好设计
+
+现在将Dispose方法放到Observer对象中，可以方便在下游和上游调用
 
 ### NextHandler
 ```go
@@ -261,11 +254,15 @@ func (next NextChan) OnNext(event *Event) {
 //TakeUntil 一直获取事件直到unitl传来事件为止
 func (ob Observable) TakeUntil(until Observable) Observable {
 	return func(sink *Observer) error {
-		go until(sink.New3(NextFunc(func(event *Event) {
+		observer := &Observer{next: sink.next}
+		utilObserver := &Observer{next: NextFunc(func(event *Event) {
 			//获取到任何数据就让下游完成
-			sink.Complete() //由于复用了complete信号，所以会导致所有复用complete的事件流完成
-		})))
-		return ob(sink)
+			event.Target.Dispose()
+			observer.Dispose()
+		})}
+		go until(utilObserver)
+		sink.Defer(utilObserver, observer)
+		return ob(observer)
 	}
 }
 ```
@@ -275,8 +272,8 @@ TakeUnitl的用途是，传入一个until事件源，当这个until事件源接�
 
 几大实现细节：
 1. 订阅until事件源，通过go关键字创建goroutine防止阻塞当前goroutine
-2. 使用函数式NextHandler，用户接受来自until事件源的事件，一旦接受任何事件，就调用sink.Complete()来使得当前事件流完成
-3. 订阅until事件源的Observer（sink.New3创建)复用了sink.dispose和sink.complete两个信号,当用户在代码中取消了订阅，就会引发该until事件源的取消订阅行为
-4. 最后一步是订阅上游事件源，我们不创建新的Observer，而直接把下游的Observer传入，避免了不必要的转发逻辑
+2. 使用函数式NextHandler，用户接受来自until事件源的事件，一旦接受任何事件，就调用observer.Dispose()来使得当前事件流完成
+3. sink.Defer(utilObserver, observer)的含义是当下游取消订阅时，将这两个级联取消————取消订阅行为的向上传播
+4. 最后一步是订阅上游事件源，并将返回结果返回————上游Observable完成也意味着本Observable完成即完成信号的向下传播
 5. 任何情况取消订阅，或者上游事件源完成都可以使得事件源函数返回，接着TakeUntil函数也会返回,即意味着完成
 6. until事件源的完成或者错误，都将忽略，所以我们没有去获取until函数返回值
