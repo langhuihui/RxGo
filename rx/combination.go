@@ -41,8 +41,8 @@ func Concat(sources ...Observable) Observable {
 func (ob Observable) share(childrenCtrl <-chan *Observer) {
 	children := make(ObserverSet)
 	eventChan := make(NextChan)
-	var source *Observer  //上游观察者
-	var sourceError error //缓存上游错误
+	completeChan := make(chan error)
+	var source *Observer //上游观察者
 	for {
 		select {
 		case child := <-childrenCtrl:
@@ -56,22 +56,20 @@ func (ob Observable) share(childrenCtrl <-chan *Observer) {
 				if len(children) == 1 {
 					source = &Observer{next: eventChan}
 					go func() {
-						sourceError = ob(source)
-						close(eventChan) //上游事件流完成，则使得所有子观察者全部完成
+						completeChan <- ob(source)
 					}()
 				}
 			}
-		case event, ok := <-eventChan:
-			if ok { //正常收到数据广播给所有子观察者
-				for sink := range children {
-					sink.Push(event)
-				}
-			} else { //上游事件流已完成，通知所有子观察者完成
-				for sink := range children {
-					sink.err = sourceError
-					sink.Dispose()
-					//children.remove(sink)
-				}
+		case event := <-eventChan:
+			for sink := range children {
+				sink.Push(event)
+			}
+		case sourceError := <-completeChan:
+			//上游事件流完成，则使得所有子观察者全部完成
+			for sink := range children {
+				sink.err = sourceError
+				sink.Dispose()
+				//children.remove(sink)
 			}
 		}
 	}
@@ -84,9 +82,7 @@ func (ob Observable) Share() Observable {
 	return func(sink *Observer) error {
 		childrenCtrl <- sink //加入观察者
 		<-sink.AddDisposeChan()
-		if sink.disposed {
-			childrenCtrl <- sink //移除观察者
-		}
+		childrenCtrl <- sink //移除观察者
 		return sink.err
 	}
 }
@@ -116,14 +112,14 @@ func CombineLatest(sources ...Observable) Observable {
 		wg.Add(count)
 		buffer := make([]interface{}, count) //待发送的数据缓存
 		e := &Event{buffer, sink}
-		for i, ob := range sources {
+		for i := range sources {
 			buffer[i] = NoData //将该坑位设置为尚未填充数据状态
-			go func(i int) {
-				ob(FuncObserver(func(event *Event) {
-					if buffer[i] == NoData {
+			go func(j int) {
+				sources[j](FuncObserver(func(event *Event) {
+					if buffer[j] == NoData {
 						atomic.AddInt32(&remain, -1)
 					}
-					buffer[i] = event.Data //缓存最新数据
+					buffer[j] = event.Data //缓存最新数据
 					if remain == 0 {       //当所有事件流都产生了事件后，就发送事件
 						sink.Push(e)
 					}
@@ -186,14 +182,14 @@ func Race(sources ...Observable) Observable {
 			sink.Defer(observers[i])
 		}
 		//分成两次循环的目的，是防止并发读写observers
-		for i, source := range sources {
-			go func(observer *Observer) {
-				sink.err = source(observer)
+		for i := range sources {
+			go func(i int) {
+				sink.err = sources[i](observers[i])
 				//如果有一个事件流完成，但从未发出过事件比如Empty，或者这个事件流就是最快的事件流，那么就导致事件流完成
-				if winner == nil || winner == observer {
+				if winner == nil || winner == observers[i] {
 					sink.Dispose()
 				}
-			}(observers[i])
+			}(i)
 		}
 		defer close(next)
 		dispose := sink.AddDisposeChan()

@@ -79,14 +79,13 @@ func (ob Observable) SkipWhile(f func(interface{}) bool) Observable {
 //SkipUntil 直到开关事件流发出事件前一直跳过事件
 func (ob Observable) SkipUntil(until Observable) Observable {
 	return func(sink *Observer) error {
-		source := &Observer{} //前期跳过所有数据
+		source := FuncObserver(EmptyNext, sink) //前期跳过所有数据
 		untilc := FuncObserver(func(event *Event) {
 			//获取到任何数据就对接上下游
 			source.next = sink.next
 			//本事件流历史使命已经完成，取消订阅
 			event.Target.Dispose()
-		}, nil)
-		sink.Defer(untilc, source)
+		}, sink)
 		go until(untilc)
 		defer untilc.Dispose() //上游完成后则终止这个订阅，如果已经终止重复Dispose没有影响
 		return ob(source)
@@ -192,29 +191,27 @@ func (ob Observable) DebounceTime(duration time.Duration) Observable {
 func (ob Observable) Throttle(f func(interface{}) Observable) Observable {
 	return func(sink *Observer) error {
 		throttles := make(chan *Event, 1) //一个缓冲，保证不会阻塞
-		var throttle *Observer
+		throttle := &Observer{
+			next: NextFunc(func(event *Event) {
+				event.Target.Dispose()
+			}),
+			disposed: true,
+		}
+		sink.Defer(throttle)
 		go func() {
 			for event := range throttles {
 				f(event.Data)(throttle)
-				throttle.Dispose()
 			}
 		}()
-		observer := FuncObserver(func(event *Event) {
-			if throttle == nil || throttle.disposed {
+		defer throttle.Dispose()
+		return ob(FuncObserver(func(event *Event) {
+			if throttle.disposed {
+				throttle.disposed = false
+				throttle.disposeList = nil
 				sink.Push(event)
-				throttle = FuncObserver(func(event *Event) {
-					event.Target.Dispose()
-				}, nil)
 				throttles <- event
 			}
-		}, nil)
-		sink.AddDisposeFunc(func() {
-			if throttle != nil {
-				throttle.Dispose()
-			}
-			observer.Dispose()
-		})
-		return ob(observer)
+		}, sink))
 	}
 }
 

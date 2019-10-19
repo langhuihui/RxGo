@@ -43,13 +43,13 @@ func Test_CombineLatest(t *T) {
 			a, ok = x[0].(int)
 			if ok && a == 2 {
 				if _, ok = x[1].(time.Time); !ok {
-					t.Fail()
+					t.Fatal("[1] is not Time")
 				}
 			} else {
-				t.Fail()
+				t.Fatal("[0] is not int")
 			}
 		} else {
-			t.Fail()
+			t.Fatal("len is not 2")
 		}
 	}))
 

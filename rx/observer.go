@@ -12,7 +12,7 @@ type Observer struct {
 	disposed    bool             //是否已经取消
 	disposeList []DisposeHandler //缓存的DisposeHandler
 	err         error            //缓存当前的错误
-	lock        sync.Mutex
+	lock        sync.Mutex       //用于Dispose的锁
 }
 
 func sinkObserver(next NextHandler, sink *Observer) (result *Observer) {
