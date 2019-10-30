@@ -95,3 +95,53 @@ func (ob Observable) SwitchMapTo(then Observable, resultSelector func(interface{
 		return then
 	}, resultSelector)
 }
+
+//Scan 类似于Reduce，只是在每次元素达到后进行计算和发射
+func (ob Observable) Scan(f func(interface{}, interface{}) interface{}) Observable {
+	return func(sink *Observer) error {
+		var aac interface{}
+		aacNext := func(event *Event) {
+			aac = f(aac, event.Data)
+			sink.Next(aac)
+		}
+		return ob(FuncObserver(func(event *Event) {
+			aac = event.Data
+			sink.Push(event)
+			event.Target.next = NextFunc(aacNext)
+		}, sink))
+	}
+}
+
+//Repeat 重复若干次上游的事件流元素
+func (ob Observable) Repeat(count int) Observable {
+	return func(sink *Observer) error {
+		var cache []*Event
+		err := ob(FuncObserver(func(event *Event) {
+			cache = append(cache, event)
+			sink.Push(event)
+		}, sink))
+		if err == nil {
+			for remain := count; remain >= 0; remain-- {
+				for _, event := range cache {
+					sink.Push(event)
+				}
+			}
+		}
+		return err
+	}
+}
+
+//PairWise 两两组成一组
+func (ob Observable) PairWise() Observable {
+	return func(sink *Observer) error {
+		var cache []interface{}
+		return ob(FuncObserver(func(event *Event) {
+			if cache == nil {
+				cache = append(cache, event.Data)
+			} else {
+				sink.Next(append(cache, event.Data))
+				cache = []interface{}{event.Data}
+			}
+		}, sink))
+	}
+}
