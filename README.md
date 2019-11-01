@@ -63,6 +63,7 @@
 **`Scan`**
 **`Repeat`**
 **`PairWise`**
+**`Buffer`**
 ## 使用方法
 ### 链式调用方式
 ```go

@@ -145,3 +145,42 @@ func (ob Observable) PairWise() Observable {
 		}, sink))
 	}
 }
+
+//Buffer 缓冲元素直到被另一个事件触发再发送缓冲中的元素
+func (ob Observable) Buffer(closingNotifier Observable) Observable {
+	return func(sink *Observer) error {
+		var buffer []interface{}
+		closingNext := make(NextChan)
+		obNext := make(NextChan)
+		closingObs := &Observer{next: closingNext}
+		obs := &Observer{next: obNext}
+		sink.Defer(closingObs, closingObs) //如果用户取消订阅，则终止两个事件流
+		go func() {                        //多路复用防止同时读写buffer对象
+			for {
+				select {
+				case event, ok := <-obNext:
+					if ok {
+						buffer = append(buffer, event.Data)
+					} else {
+						return
+					}
+				case _, ok := <-closingNext:
+					if ok {
+						sink.Next(buffer)
+						buffer = make([]interface{}, 0)
+					} else {
+						return
+					}
+				}
+			}
+		}()
+		go func() {
+			closingNotifier(closingObs)
+			close(closingNext)
+			obs.Dispose() //如果控制事件流先完成，则终止当前事件流
+		}()
+		defer closingObs.Dispose() //如果当前事件流先完成，则终止控制事件流
+		defer close(obNext)
+		return ob(obs)
+	}
+}

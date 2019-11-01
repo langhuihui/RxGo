@@ -3,6 +3,7 @@ package unit_tests
 import (
 	. "github.com/langhuihui/RxGo/rx"
 	. "testing"
+	"time"
 )
 
 func Test_MergeMap(t *T) {
@@ -29,4 +30,7 @@ func Test_Repeat(t *T) {
 }
 func Test_PairWise(t *T) {
 	Range(0, 5).PairWise().Subscribe(NextFunc(func(event *Event) { t.Log(event.Data) }))
+}
+func Test_Buffer(t *T) {
+	Interval(time.Second / 2).Buffer(Timeout(time.Second * 2)).Subscribe(NextFunc(func(event *Event) { t.Log(event.Data) }))
 }
