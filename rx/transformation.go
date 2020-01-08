@@ -1,22 +1,25 @@
 package rx
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 //Map 对元素做一层映射（转换）
 func (ob Observable) Map(f func(interface{}) interface{}) Observable {
 	return func(sink *Observer) error {
-		return ob(FuncObserver(func(event *Event) {
+		return ob(sink.CreateFuncObserver(func(event *Event) {
 			sink.Next(f(event.Data))
-		}, sink))
+		}))
 	}
 }
 
 //MapTo 映射成一个固定值
 func (ob Observable) MapTo(data interface{}) Observable {
 	return func(sink *Observer) error {
-		return ob(FuncObserver(func(event *Event) {
+		return ob(sink.CreateFuncObserver(func(event *Event) {
 			sink.Next(data)
-		}, sink))
+		}))
 	}
 }
 
@@ -26,22 +29,22 @@ func (ob Observable) MergeMap(f func(interface{}) Observable, resultSelector fun
 		wg := sync.WaitGroup{}
 		wg.Add(1) //母事件流等待信号
 		subMap := func(data interface{}) {
-			f(data)(FuncObserver(sink.Push, sink))
+			f(data)(sink.CreateFuncObserver(sink.Push))
 			wg.Done()
 		}
 		if resultSelector != nil { //使用结果选择器
 			subMap = func(data interface{}) {
-				f(data)(FuncObserver(func(event *Event) {
+				f(data)(sink.CreateFuncObserver(func(event *Event) {
 					sink.Next(resultSelector(data, event.Data))
-				}, sink))
+				}))
 				wg.Done()
 			}
 		}
 		go func() {
-			err = ob(FuncObserver(func(event *Event) {
+			err = ob(sink.CreateFuncObserver(func(event *Event) {
 				wg.Add(1)
 				go subMap(event.Data)
-			}, sink))
+			}))
 			wg.Done()
 		}()
 		wg.Wait() //等待所有子事件流完成后再完成
@@ -58,8 +61,9 @@ func (ob Observable) MergeMapTo(then Observable, resultSelector func(interface{}
 
 //SwitchMap 将元素映射成事件流然后发送其中的元素
 func (ob Observable) SwitchMap(f func(interface{}) Observable, resultSelector func(interface{}, interface{}) interface{}) Observable {
-	return func(sink *Observer) error {
-		var currentSub *Observer
+	return func(sink *Observer) (err error) {
+		currentSub := new(Observer)
+		ctxSub := context.Background()
 		wg := sync.WaitGroup{}
 		subMap := func(data interface{}, currentSub *Observer) {
 			f(data)(currentSub)
@@ -67,25 +71,29 @@ func (ob Observable) SwitchMap(f func(interface{}) Observable, resultSelector fu
 		}
 		wg.Add(1)
 		go func() {
-			ob(FuncObserver(func(event *Event) {
-				if currentSub != nil { //关闭上一个子事件流
-					currentSub.Dispose()
+			err = ob(sink.CreateFuncObserver(func(event *Event) {
+				if currentSub.cancel != nil { //关闭上一个子事件流
+					currentSub.cancel()
 				}
 				if resultSelector != nil {
 					data := event.Data
-					currentSub = FuncObserver(func(event *Event) {
+					currentSub.next = NextFunc(func(event *Event) {
 						sink.Next(resultSelector(data, event.Data))
-					}, nil)
+					})
 				} else {
-					currentSub = FuncObserver(sink.Push, nil)
+					currentSub.next = NextFunc(sink.Push)
 				}
+				currentSub.Context, currentSub.cancel = context.WithCancel(ctxSub)
 				wg.Add(1)
 				go subMap(event.Data, currentSub)
-			}, sink))
+			}))
 			wg.Done()
 		}()
 		wg.Wait()
-		return sink.err
+		if currentSub.cancel != nil {
+			currentSub.cancel()
+		}
+		return
 	}
 }
 
@@ -104,30 +112,29 @@ func (ob Observable) Scan(f func(interface{}, interface{}) interface{}) Observab
 			aac = f(aac, event.Data)
 			sink.Next(aac)
 		}
-		return ob(FuncObserver(func(event *Event) {
+		return ob(sink.CreateFuncObserver(func(event *Event) {
 			aac = event.Data
 			sink.Push(event)
-			event.Target.next = NextFunc(aacNext)
-		}, sink))
+			event.Context.next = NextFunc(aacNext)
+		}))
 	}
 }
 
 //Repeat 重复若干次上游的事件流元素
 func (ob Observable) Repeat(count int) Observable {
-	return func(sink *Observer) error {
+	return func(sink *Observer) (err error) {
 		var cache []*Event
-		err := ob(FuncObserver(func(event *Event) {
+		if err = ob(sink.CreateFuncObserver(func(event *Event) {
 			cache = append(cache, event)
 			sink.Push(event)
-		}, sink))
-		if err == nil {
+		})); err == nil {
 			for remain := count; remain >= 0; remain-- {
 				for _, event := range cache {
 					sink.Push(event)
 				}
 			}
 		}
-		return err
+		return
 	}
 }
 
@@ -135,14 +142,14 @@ func (ob Observable) Repeat(count int) Observable {
 func (ob Observable) PairWise() Observable {
 	return func(sink *Observer) error {
 		var cache []interface{}
-		return ob(FuncObserver(func(event *Event) {
+		return ob(sink.CreateFuncObserver(func(event *Event) {
 			if cache == nil {
 				cache = append(cache, event.Data)
 			} else {
 				sink.Next(append(cache, event.Data))
 				cache = []interface{}{event.Data}
 			}
-		}, sink))
+		}))
 	}
 }
 
@@ -152,10 +159,9 @@ func (ob Observable) Buffer(closingNotifier Observable) Observable {
 		var buffer []interface{}
 		closingNext := make(NextChan)
 		obNext := make(NextChan)
-		closingObs := &Observer{next: closingNext}
-		obs := &Observer{next: obNext}
-		sink.Defer(closingObs, closingObs) //如果用户取消订阅，则终止两个事件流
-		go func() {                        //多路复用防止同时读写buffer对象
+		closingObs := sink.CreateChanObserver(closingNext)
+		obs := sink.CreateChanObserver(obNext)
+		go func() { //多路复用防止同时读写buffer对象
 			for {
 				select {
 				case event, ok := <-obNext:
@@ -177,9 +183,9 @@ func (ob Observable) Buffer(closingNotifier Observable) Observable {
 		go func() {
 			closingNotifier(closingObs)
 			close(closingNext)
-			obs.Dispose() //如果控制事件流先完成，则终止当前事件流
+			obs.cancel() //如果控制事件流先完成，则终止当前事件流
 		}()
-		defer closingObs.Dispose() //如果当前事件流先完成，则终止控制事件流
+		defer closingObs.cancel() //如果当前事件流先完成，则终止控制事件流
 		defer close(obNext)
 		return ob(obs)
 	}

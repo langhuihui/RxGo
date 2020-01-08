@@ -10,11 +10,11 @@ func FromSlice(slice []interface{}) Observable {
 	return func(sink *Observer) error {
 		for _, data := range slice {
 			sink.Next(data)
-			if sink.disposed {
+			if sink.IsDisposed() {
 				return nil
 			}
 		}
-		return sink.err
+		return nil
 	}
 }
 
@@ -26,16 +26,15 @@ func Of(array ...interface{}) Observable {
 //FromChan 把一个chan转换成事件流
 func FromChan(source <-chan interface{}) Observable {
 	return func(sink *Observer) error {
-		dispose := sink.AddDisposeChan()
 		for {
 			select {
-			case <-dispose:
-				return sink.err
+			case <-sink.Done():
+				return nil
 			case data, ok := <-source:
 				if ok {
 					sink.Next(data)
 				} else {
-					return sink.err
+					return nil
 				}
 			}
 		}
@@ -46,25 +45,25 @@ func FromChan(source <-chan interface{}) Observable {
 func Range(start int, count uint) Observable {
 	end := start + int(count)
 	return func(sink *Observer) error {
-		for i := start; i < end && !sink.disposed; i++ {
+		for i := start; i < end && !sink.IsDisposed(); i++ {
 			sink.Next(i)
 		}
-		return sink.err
+		return nil
 	}
 }
 
 //Never 永不回答
 func Never() Observable {
 	return func(sink *Observer) error {
-		<-sink.AddDisposeChan()
-		return sink.err
+		<-sink.Done()
+		return nil
 	}
 }
 
 //Empty 不会发送任何数据，直接完成
 func Empty() Observable {
 	return func(sink *Observer) error {
-		return sink.err
+		return nil
 	}
 }
 
