@@ -192,37 +192,18 @@ type Observable func(*Observer) error
 ### 观察者对象`Observer`
 ```go
 type Observer struct {
-	next NextHandler //缓存当前的NextHandler，后续可以被替换
-	disposed    bool             //是否已经取消
-	disposeList []DisposeHandler //缓存的DisposeHandler
-	err         error            //缓存当前的错误
-	lock        sync.Mutex       //用于Dispose的锁
+    context.Context //组合继承方式，用于监听被取消订阅的事件
+	cancel          context.CancelFunc //缓存取消函数
+	next            NextHandler //缓存当前的NextHandler，后续可以被替换
 }
 ```
 该控制器为一个结构体，其中next记录了当前的NextHandler，
 
-**取消订阅**的行为是设置标志位，然后级联调用被缓存进来的DisposeHandler。
-这些DisposeHandler都是由上由Observable设置的，用来释放资源。
-```go
-//Dispose 取消订阅
-func (c *Observer) Dispose() {
-	c.lock.Lock()
-	if c.disposed {
-		return
-	}
-	c.disposed = true
-	c.lock.Unlock()
-	for _, handler := range c.disposeList {
-		handler.Dispose()
-	}
-}
-```
+**取消订阅**的行为调用cancel函数，golang提供的context可以完美的适配这种场景。
 
 `Observer`对象为`Observable`和事件处理逻辑共同持有，是二者沟通的桥梁
-
-之所以如此设计，是因为Observable如果返回结构体会使得设计变复杂，Golang没有继承，所以不好设计
-
-现在将Dispose方法放到Observer对象中，可以方便在下游和上游调用
+可以把`Observer`对象直接理解为context，只是多了用来发送数据的next函数。
+把cancel函数缓存在结构体中不是业界推荐的做法，但是考虑到框架调用的便利性还是这么做了。
 
 ### NextHandler
 ```go
@@ -258,15 +239,9 @@ func (next NextChan) OnNext(event *Event) {
 //TakeUntil 一直获取事件直到unitl传来事件为止
 func (ob Observable) TakeUntil(until Observable) Observable {
 	return func(sink *Observer) error {
-		observer := &Observer{next: sink.next}
-		utilObserver := &Observer{next: NextFunc(func(event *Event) {
-			//获取到任何数据就让下游完成
-			event.Target.Dispose()
-			observer.Dispose()
-		})}
-		go until(utilObserver)
-		sink.Defer(utilObserver, observer)
-		return ob(observer)
+		ctx, cancel := context.WithCancel(sink)
+		go until(&Observer{ctx, cancel, NextCancel(cancel)})
+		return ob(&Observer{ctx, cancel, sink.next})
 	}
 }
 ```
@@ -276,8 +251,8 @@ TakeUnitl的用途是，传入一个until事件源，当这个until事件源接�
 
 几大实现细节：
 1. 订阅until事件源，通过go关键字创建goroutine防止阻塞当前goroutine
-2. 使用函数式NextHandler，用户接受来自until事件源的事件，一旦接受任何事件，就调用observer.Dispose()来使得当前事件流完成
-3. sink.Defer(utilObserver, observer)的含义是当下游取消订阅时，将这两个级联取消————取消订阅行为的向上传播
+2. NextCancel包装的cancel函数，作用就是当until事件源发送任意事件时，调用cancel函数，达到取消订阅的目的
+3. 两个事件源订阅都复用了同一个派生的context，这样的话，如果下游取消订阅就能同时取消这两个事件源的订阅。
 4. 最后一步是订阅上游事件源，并将返回结果返回————上游Observable完成也意味着本Observable完成即完成信号的向下传播
 5. 任何情况取消订阅，或者上游事件源完成都可以使得事件源函数返回，接着TakeUntil函数也会返回,即意味着完成
 6. until事件源的完成或者错误，都将忽略，所以我们没有去获取until函数返回值
