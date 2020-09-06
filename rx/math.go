@@ -55,7 +55,7 @@ func (ob Observable) Reduce(f func(interface{}, interface{}) interface{}) Observ
 		}
 		return ob(sink.CreateFuncObserver(func(event *Event) {
 			aac = event.Data
-			event.Context.next = NextFunc(aacNext)
+			event.next = NextFunc(aacNext)
 		}))
 	}
 }

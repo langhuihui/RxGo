@@ -124,8 +124,10 @@ func MyObservable (sink *Control) error {
 func main(){
     ob := Observable(MyObservable)
     ob.Subscribe(NextFunc(func(event *Event) {
-        
+        //event.Dispose()
     }))
+    subscribtion:= ob.SubscribeAsync(NextFunc(func(event *Event) {}),func(err error){},func(){})
+    //subscribtion.Dispose()
 }
 ```
 

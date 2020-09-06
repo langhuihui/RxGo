@@ -115,7 +115,7 @@ func (ob Observable) Scan(f func(interface{}, interface{}) interface{}) Observab
 		return ob(sink.CreateFuncObserver(func(event *Event) {
 			aac = event.Data
 			sink.Push(event)
-			event.Context.next = NextFunc(aacNext)
+			event.next = NextFunc(aacNext)
 		}))
 	}
 }

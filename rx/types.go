@@ -2,8 +2,8 @@ package rx
 
 type (
 	Event struct {
-		Data    interface{}
-		Context *Observer
+		Data interface{}
+		*Observer
 	}
 	NextHandler interface {
 		OnNext(*Event)
@@ -28,7 +28,7 @@ func (next NextCancel) OnNext(event *Event) {
 }
 
 func (event *Event) ChangeHandler(observer *Observer) {
-	event.Context.next = observer.next
+	event.next = observer.next
 }
 
 var (

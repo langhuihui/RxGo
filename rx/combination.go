@@ -209,7 +209,7 @@ func Race(sources ...Observable) Observable {
 				return
 			case event := <-next:
 				if winner == nil { //有人率先到达了
-					winner = event.Context
+					winner = event.Observer
 					//其他事件流此时可以统统取消
 					for _, ob := range observers {
 						if ob != winner {

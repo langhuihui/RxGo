@@ -16,7 +16,7 @@ func (ob Observable) Take(count uint) Observable {
 		return ob(sink.NewFuncObserver(func(event *Event) {
 			sink.Push(event)
 			if atomic.AddInt32(&remain, -1) == 0 {
-				event.Context.cancel() //取消订阅上游事件流
+				event.cancel() //取消订阅上游事件流
 			}
 		}))
 	}
@@ -38,7 +38,7 @@ func (ob Observable) TakeWhile(f func(interface{}) bool) Observable {
 			if f(event.Data) {
 				sink.Push(event)
 			} else {
-				event.Context.cancel() //取消订阅上游事件流
+				event.cancel() //取消订阅上游事件流
 			}
 		}))
 	}
@@ -79,7 +79,7 @@ func (ob Observable) SkipUntil(until Observable) Observable {
 			//获取到任何数据就对接上下游
 			source.next = sink.next
 			//本事件流历史使命已经完成，取消订阅
-			event.Context.cancel()
+			event.cancel()
 		})
 		go until(utilOb)
 		defer utilOb.cancel() //上游完成后则终止这个订阅，如果已经终止重复Dispose没有影响
@@ -151,7 +151,7 @@ func (ob Observable) Debounce(f func(interface{}) Observable) Observable {
 		return ob(sink.CreateFuncObserver(func(event *Event) {
 			if throttle == nil || throttle.IsDisposed() {
 				throttle = sink.CreateFuncObserver(func(event *Event) {
-					event.Context.cancel()
+					event.cancel()
 				})
 				throttles <- event
 			}
@@ -217,7 +217,7 @@ func (ob Observable) ElementAt(index uint) Observable {
 		return ob(sink.NewFuncObserver(func(event *Event) {
 			if count == index {
 				sink.Push(event)
-				event.Context.cancel()
+				event.cancel()
 			} else {
 				count++
 			}
@@ -231,7 +231,7 @@ func (ob Observable) Find(f func(interface{}) bool) Observable {
 		return ob(sink.NewFuncObserver(func(event *Event) {
 			if f(event.Data) {
 				sink.Push(event)
-				event.Context.cancel()
+				event.cancel()
 			}
 		}))
 	}
@@ -244,7 +244,7 @@ func (ob Observable) FindIndex(f func(interface{}) bool) Observable {
 		return ob(sink.NewFuncObserver(func(event *Event) {
 			if f(event.Data) {
 				sink.Next(index)
-				event.Context.cancel()
+				event.cancel()
 			} else {
 				index++
 			}
@@ -257,7 +257,7 @@ func (ob Observable) First() Observable {
 	return func(sink *Observer) error {
 		return ob(sink.NewFuncObserver(func(event *Event) {
 			sink.Push(event)
-			event.Context.cancel()
+			event.cancel()
 		}))
 	}
 }
